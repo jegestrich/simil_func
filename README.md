@@ -65,8 +65,8 @@ After setting up the conda environment,
 the package by executing the following commands:
 ```
 $conda activate simil_func
-$git clone https://github.com/jegestrich/Jet-Noise.git
-$cd package_name
+$git clone https://github.com/jegestrich/simil_func.git
+$cd simil_func
 $pip install -e .
 ```
 The final command installs the package in "editable" mode, which means that you
