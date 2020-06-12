@@ -305,7 +305,7 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
         sol_trf_mat = np.array([np.array([sol_all_trf.x,sol_LST_trf.x,sol_FST_trf.x])]).T
         return beam, beamf, tvec, SPL, PSD, fpsd, sol_mat, sol_trf_mat, norm_m, norm_trf
 
-def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_m=None, norm_trf=None, freqmin=FREQMIN, freqmax=FREQMAX, method='lm'):
+def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_lm=None, norm_trf=None, sol_lm=None, sol_trf=None, freqmin=FREQMIN, freqmax=FREQMAX, method='lm'):
     import matplotlib.pyplot as plt
     import numpy.matlib
     '''
@@ -313,35 +313,42 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_m=None, norm_trf=None, fre
     '''
 
     Pmax = np.max(np.max(PSD[np.all([fpsd<freqmax,fpsd>freqmin],axis=0),:]))
+    Pmin_avg = np.median(np.min(PSD[np.all([fpsd<freqmax,fpsd>freqmin],axis=0),:]))
     err = 0.05
     ######## find outlier where LST&FST has larger misfir then LST or FST separately
-    outlier_all = None
+    outlier_lm = None
     outlier_trf = None
     if method == 'lm':
-        if np.any([np.any([norm_m[0,:]>norm_m[1,:]+err,norm_m[0,:]>norm_m[2,:]+err],axis=0)]):
-            outlier_all = np.where(np.any([norm_m[0,:]>norm_m[1,:]+err,norm_m[0,:]>norm_m[2,:]+err],axis=0))
+        if np.any([np.any([norm_lm[0,:]>norm_lm[1,:]+err,norm_lm[0,:]>norm_lm[2,:]+err],axis=0)]):
+            outlier_lm = np.where(np.any([norm_lm[0,:]>norm_lm[1,:]+err,norm_lm[0,:]>norm_lm[2,:]+err],axis=0))
     elif method == 'trf':
         if np.any([np.any([norm_trf[0,:]>norm_trf[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0)]):
-            outlier_trf = np.where(np.any([norm_trf[0,:]>norm_m[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0))
+            outlier_trf = np.where(np.any([norm_trf[0,:]>norm_trf[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0))
     elif method == 'lm&trf':
-        if np.any([np.any([norm_m[0,:]>norm_m[1,:]+err,norm_m[0,:]>norm_m[2,:]+err],axis=0)]):
-            outlier_all = np.where(np.any([norm_m[0,:]>norm_m[1,:]+err,norm_m[0,:]>norm_m[2,:]+err],axis=0))
+        if np.any([np.any([norm_lm[0,:]>norm_lm[1,:]+err,norm_lm[0,:]>norm_lm[2,:]+err],axis=0)]):
+            outlier_lm = np.where(np.any([norm_lm[0,:]>norm_lm[1,:]+err,norm_lm[0,:]>norm_lm[2,:]+err],axis=0))
         if np.any([np.any([norm_trf[0,:]>norm_trf[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0)]):
-            outlier_trf = np.where(np.any([norm_trf[0,:]>norm_m[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0))
+            outlier_trf = np.where(np.any([norm_trf[0,:]>norm_lm[1,:]+err,norm_trf[0,:]>norm_trf[2,:]+err],axis=0))
 
     fig = plt.figure(constrained_layout=True, figsize=(10,6))
-    gs = fig.add_gridspec(4, 2)
+    if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+        gs = fig.add_gridspec(5, 2)
+    else:
+        gs = fig.add_gridspec(4, 2)
     ######## Spectrogram #####################
     ax0 = fig.add_subplot(gs[0, :])
     ax0.set_yscale('log')
     im = ax0.pcolormesh(tmid, fpsd, PSD, cmap='magma')
-    im.set_clim([80, Pmax])
+    im.set_clim([Pmin_avg+20, Pmax])
     ax0.axis('tight')
     ax0.set_xticklabels([])
     ax0.set_yticks(np.logspace(-1,2,4))
     ax0.set_ylim([0.1,50])
     ax0.plot([tmid[0],tmid[-1]],[freqmin,freqmin],'w--',linewidth=0.8)
     ax0.plot([tmid[0],tmid[-1]],[freqmax,freqmax],'w--',linewidth=0.8)
+    Pmax_ind = np.asarray([np.where(PSD[np.all([fpsd<freqmax,fpsd>freqmin],axis=0), i] == np.max(PSD[np.all([fpsd<freqmax,fpsd>freqmin],axis=0),:],axis=0)[i])[0] for i in range(len(tmid))]).squeeze()
+    freqmin_ind = np.where(np.abs(fpsd-freqmin) == np.min(np.abs(fpsd-freqmin)))
+    ax0.plot(tmid,fpsd[Pmax_ind+freqmin_ind].squeeze(),'w.',markersize=2)
     ax0.set_ylabel('Frequency [Hz]')
     ax0.grid()
     cax = plt.axes([0.84, 0.76, 0.025, 0.14])
@@ -360,26 +367,77 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_m=None, norm_trf=None, fre
     axn.grid()
     axn.set_ylabel('SPL [dB]',color='yellowgreen')
     axn.tick_params(axis='y', colors='yellowgreen')
+    ######## Peak Frequency ##########################
+    if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+        axf = fig.add_subplot(gs[2, :])
+        if np.any([sol_trf != None]):
+            Pmax_trf_ind = np.asarray([np.where(simil_func(sol_trf[:,0,i],fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                                            np.max(simil_func(sol_trf[:,0,i],fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)], axis=0))[0] for i in range(len(tmid))]).squeeze()
+            Pmax_trf_LST_ind = np.asarray(
+                [np.where(simil_LST_func(sol_trf[:, 1, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                          np.max(
+                              simil_LST_func(sol_trf[:, 1, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)],
+                              axis=0))[0] for i in range(len(tmid))]).squeeze()
+            Pmax_trf_FST_ind = np.asarray(
+                [np.where(simil_FST_func(sol_trf[:, 2, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                          np.max(
+                              simil_FST_func(sol_trf[:, 2, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)],
+                              axis=0))[0] for i in range(len(tmid))]).squeeze()
+            freqmin_ind = np.where(np.abs(fpsd - freqmin) == np.min(np.abs(fpsd - freqmin)))
+            fmax_trf = fpsd[freqmin_ind + Pmax_trf_ind].squeeze()
+            fmax_trf_LST = fpsd[freqmin_ind + Pmax_trf_LST_ind].squeeze()
+            fmax_trf_FST = fpsd[freqmin_ind + Pmax_trf_FST_ind].squeeze()
+            axf.plot(tmid,fmax_trf_LST, '^-', color='r', label='f$_{peak}$(LST) (trf)', markersize=2, alpha=0.5)
+            axf.plot(tmid, fmax_trf_FST, '^-', color='b', label='f$_{peak}$(FST) (trf)', markersize=2, alpha=0.5)
+            axf.plot(tmid, fmax_trf, '^-', color='g', label='f$_{peak}$(LST&FST) (trf)', markersize=2, alpha=0.5)
+        if np.any([sol_lm != None]):
+            Pmax_lm_ind = np.asarray([np.where(simil_func(sol_lm[:,0,i],fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                                            np.max(simil_func(sol_lm[:,0,i],fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)], axis=0))[0] for i in range(len(tmid))]).squeeze()
+            Pmax_lm_LST_ind = np.asarray(
+                [np.where(simil_func(sol_lm[:, 1, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                          np.max(
+                              simil_func(sol_lm[:, 1, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)],
+                              axis=0))[0] for i in range(len(tmid))]).squeeze()
+            Pmax_lm_FST_ind = np.asarray(
+                [np.where(simil_func(sol_lm[:, 2, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
+                          np.max(
+                              simil_func(sol_lm[:, 2, i], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)],
+                              axis=0))[0] for i in range(len(tmid))]).squeeze()
+            freqmin_ind = np.where(np.abs(fpsd - freqmin) == np.min(np.abs(fpsd - freqmin)))
+            fmax_lm = fpsd[freqmin_ind + Pmax_lm_ind].squeeze()
+            fmax_lm_LST = fpsd[freqmin_ind + Pmax_lm_LST_ind].squeeze()
+            fmax_lm_FST = fpsd[freqmin_ind + Pmax_lm_FST_ind].squeeze()
+            axf.plot(tmid, fmax_lm_LST, '.-', color='r', label='f$_{peak}$(LST) (lm)')
+            axf.plot(tmid, fmax_lm_FST, '.-', color='b', label='f$_{peak}$(FST) (lm)')
+            axf.plot(tmid, fmax_lm, '.-', color='g', label='f$_{peak}$(LST&FST) (lm)')
+        axf.plot(tmid, fpsd[Pmax_ind+freqmin_ind].squeeze(), 'k.', label='f$_{peak}$(data)')
+        axf.set_ylabel('Peak Frequency')
+        axf.legend(loc='upper left', bbox_to_anchor=(1.1,1), borderaxespad=0.)
+        axf.set_xlim([tmid[0], tmid[-1]])
+        axf.set_xticklabels([])
     ######## Misfit ##################################
-    ax2 = fig.add_subplot(gs[2:, :])
+    if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+        ax2 = fig.add_subplot(gs[3:, :])
+    else:
+        ax2 = fig.add_subplot(gs[2:, :])
     if method == 'lm':
-        ax2.plot(tmid, norm_m[1,:],'-',color='r',label='LST',linewidth=1)
-        ax2.plot(tmid, norm_m[2,:],'-',color='b',label='FST',linewidth=1)
-        ax2.plot(tmid, norm_m[0,:],'-',color='g',label='LST & FST',linewidth=1)
+        ax2.plot(tmid, norm_lm[1,:],'-',color='r',label='LST',linewidth=1)
+        ax2.plot(tmid, norm_lm[2,:],'-',color='b',label='FST',linewidth=1)
+        ax2.plot(tmid, norm_lm[0,:],'-',color='g',label='LST & FST',linewidth=1)
     elif method == 'trf':
         ax2.plot(tmid, norm_trf[1,:],'-',color='r',label='LST',linewidth=1)
         ax2.plot(tmid, norm_trf[2,:],'-',color='b',label='FST',linewidth=1)
         ax2.plot(tmid, norm_trf[0,:],'-',color='g',label='LST & FST',linewidth=1)
     elif method == 'lm&trf':
-        ax2.plot(tmid, norm_m[1,:],'-',color='r',label='LST (lm)',linewidth=1)
-        ax2.plot(tmid, norm_m[2,:],'-',color='b',label='FST (lm)',linewidth=1)
-        ax2.plot(tmid, norm_m[0,:],'-',color='g',label='LST & FST (lm)',linewidth=1)
+        ax2.plot(tmid, norm_lm[1,:],'-',color='r',label='LST (lm)',linewidth=1)
+        ax2.plot(tmid, norm_lm[2,:],'-',color='b',label='FST (lm)',linewidth=1)
+        ax2.plot(tmid, norm_lm[0,:],'-',color='g',label='LST & FST (lm)',linewidth=1)
         ax2.plot(tmid, norm_trf[1,:],'--',color='r',label='LST (trf)',linewidth=1)
         ax2.plot(tmid, norm_trf[2,:],'--',color='b',label='FST (trf)',linewidth=1)
         ax2.plot(tmid, norm_trf[0,:],'--',color='g',label='LST & FST (trf)',linewidth=1)
     YLIM2 = ax2.get_ylim()
-    if outlier_all is not None:
-        ax2.scatter(tmid[outlier_all[0]],numpy.matlib.repmat(np.max(np.max(norm_m)),1,len(outlier_all[0])),c='g',s=30,label='Misfit Anomaly',marker='v')
+    if outlier_lm is not None:
+        ax2.scatter(tmid[outlier_lm[0]],numpy.matlib.repmat(np.max(np.max(norm_lm)),1,len(outlier_lm[0])),c='g',s=30,label='Misfit Anomaly',marker='v')
     if outlier_trf is not None:
         ax2.scatter(tmid[outlier_trf[0]],numpy.matlib.repmat(np.max(np.max(norm_trf)),1,len(outlier_trf[0])),c='k',s=30,label='Misfit Anomaly',marker='v')
     ax2.set_ylim(YLIM2)
@@ -395,15 +453,25 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_m=None, norm_trf=None, fre
         ax0.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec/(60*60))))) #tick location
         axn.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec/(60*60))))) #tick location
         ax2.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec/(60*60))))) #tick location
+        if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+            axf.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
     elif dt_sec/(60*60) < 1:
         ax0.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
         axn.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
         ax2.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
+        if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+            axf.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec / 60))))  # tick location
     ax2.xaxis.set_major_formatter(dates.DateFormatter("%m/%d-%H:%M")) # tick formats
     ######################################
-    ax2.get_shared_x_axes().join( ax2, ax0, axn)
+    if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+        ax2.get_shared_x_axes().join( ax2, ax0, axn, axf)
+    else:
+        ax2.get_shared_x_axes().join(ax2, ax0, axn)
     fig.suptitle(str(dates.num2date(tmid[0])).replace(':','_')[:10],y=0.95)
     plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
     fig.autofmt_xdate()
-    ax = [ax0, ax1, axn, ax2]
+    if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
+        ax = [ax0, ax1, axn, axf, ax2]
+    else:
+        ax = [ax0, ax1, axn, ax2]
     return fig, ax
