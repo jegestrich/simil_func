@@ -1,1 +1,1 @@
-from .simil_func import simil_func, simil_LST_func, simil_FST_func, simil_fit, simil_plot
+from .simil_func import simil_func, simil_LST_func, simil_FST_func, simil_fit, simil_plot, misfit, myinterp
