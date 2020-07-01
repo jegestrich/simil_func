@@ -305,11 +305,26 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
         sol_trf_mat = np.array([np.array([sol_all_trf.x,sol_LST_trf.x,sol_FST_trf.x])]).T
         return beam, beamf, tvec, SPL, PSD, fpsd, sol_mat, sol_trf_mat, norm_m, norm_trf
 
-def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_lm=None, norm_trf=None, sol_lm=None, sol_trf=None, freqmin=FREQMIN, freqmax=FREQMAX, method='lm'):
+def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, method='lm', norm_lm=None, norm_trf=None, sol_lm=None, sol_trf=None, freqmin=FREQMIN, freqmax=FREQMAX):
     import matplotlib.pyplot as plt
     import numpy.matlib
     '''
     INPUT
+    beam: [array (n,)] beamformed waveform, data point for every time in tvec
+    tvec: [array (n,)] time vector for beam
+    SPL: [array (m,)] sound pressure level, data point for every time in tmid   
+    PSD: [matrix (nf,m)] array of PSDs for times tmid
+    fpsd: [array (nf,)] array of frequencies for PSD
+    tmid: [array (m,)] array of times for PSD and SPL
+    method: ['lm' or 'trf' or 'lm&trf'] method for Gauss Newton inversion used to generate norm and inversion solution
+    norm_lm, norm_trf: [array (3,m)] misfit norm calculated with simil_fit, only use *_lm or *_trf when method includes them
+    sol_lm, sol_trf [array (5,3,m)] solution model parameters calculated with simil_fit, only use *_lm or *_trf when method includes them
+    freqmin, freqmax [float] frequency min and max for fitting (defaults to 0.3-10Hz)
+    
+    OUTPUT:
+    fig: [matplotlib figure object]
+    ax: [array of matplotlib acis objects] 
+   
     '''
 
     Pmax = np.max(np.max(PSD[np.all([fpsd<freqmax,fpsd>freqmin],axis=0),:]))
