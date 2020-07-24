@@ -211,7 +211,7 @@ FREQMIN = 0.3
 F8BAZ = 121
 M0 = np.array([np.log(400),np.log(300),np.log(20),1,1])
 
-def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M0, PSD_win=None):
+def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M0, PSD_win='1min'):
     from array_processing.tools import beamForm
     from array_processing.algorithms.helpers import getrij
     '''
@@ -228,7 +228,7 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
     PSD_win: [float] number of points per psd window (they overlap by 50% and will be averaged), (equals nperseg for scipy.signal.welch), default: 1 minute windows (60 * sampling rate)
     '''
     ##### Defaults: ##############
-    if PSD_win is None:
+    if PSD_win == '1min':
         PSD_win = int(60 * st[0].stats.sampling_rate)
     b1 = np.array([np.log(1e-5),np.log(1e-5),np.log(1e-5),1e-5,1e-5])
     b2 = np.array([np.log(1000),np.log(1000),np.log(1000),20,30])
@@ -237,7 +237,7 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
 
     tvec=dates.date2num(st[0].stats.starttime.datetime)+st[0].times()/86400   #datenum time vector
 
-    stf = st.copy() ## for sound pressure level
+    stf = st.copy() ## filter for sound pressure level
     stf.filter("bandpass", freqmin=freqmin, freqmax=freqmax, corners=2, zerophase=True)
     stf.taper(max_percentage=.01)
 
@@ -256,23 +256,24 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
         data[:,1] = st[1].data
         data[:,2] = st[2].data
         data[:,3] = st[3].data
-        beam = beamForm(data, rij, st[0].stats.sampling_rate, baz, M=len(tvec))
+        beam = beamForm(data, rij, st[0].stats.sampling_rate, baz, M=len(tvec)) #unfiltered beamformed data
 
         dataf = np.zeros((len(st[0].data),4))
         dataf[:,0] = stf[0].data
         dataf[:,1] = stf[1].data
         dataf[:,2] = stf[2].data
         dataf[:,3] = stf[3].data
-        beamf = beamForm(dataf, rij, stf[0].stats.sampling_rate, baz, M=len(tvec))
+        beamf = beamForm(dataf, rij, stf[0].stats.sampling_rate, baz, M=len(tvec)) #filtered beamformed data (used for SPL)
 
     p_rms = np.sqrt(np.nanmean(beamf[beamf!=0]**2))
-    SPL = 10 * np.log10(p_rms**2/pref**2)
+    SPL = 10 * np.log10(p_rms**2/pref**2) #sound pressure level
 
     ## Calculate PSD
-    fpsd_o, Pxx = scipy.signal.welch(beam, st[0].stats.sampling_rate, nperseg=PSD_win)
-    PxxdBpsd_o = 10 * np.log10(abs(Pxx) /pref**2)
-    fpsd, PSD = myinterp(fpsd_o[1:],PxxdBpsd_o[1:])
+    fpsd_o, PSD_o = scipy.signal.welch(beam, st[0].stats.sampling_rate, nperseg=PSD_win) #calculate PSD with Welch's method
+    PSDdB_o = 10 * np.log10(abs(PSD_o) /pref**2) #converting to decibel
+    fpsd, PSD = myinterp(fpsd_o[1:],PSDdB_o[1:]) #interpolateing to have equal spacing in log10 frequency space (important for equal fitting of low and high frequencies)
 
+    #choose frequencies and PSD bewteen frequency bounds for fitting
     f = fpsd[np.all([fpsd>freqmin,fpsd<freqmax],axis=0)]
     d = np.reshape(PSD[np.all([fpsd>freqmin,fpsd<freqmax],axis=0)],(len(f),1))
     fL = f[np.where(d==np.max(d))[0]]
