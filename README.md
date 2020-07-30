@@ -114,7 +114,7 @@ Authors
 -------
 
 (_Alphabetical order by last name._)
-
+David Fee
 Julia Gestrich
 
 <!--stackedit_data:
