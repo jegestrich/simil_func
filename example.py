@@ -8,7 +8,7 @@ from array_processing.algorithms.helpers import getrij
 from matplotlib import dates
 import matplotlib.pyplot as plt
 
-filepath = 'data_example/mseed_infra_July16-17/'
+filepath = 'data_example/mseed_infra_June16-17/'
 coord_file = 'data_example/local_infra_coords.json'
 network = 'HV'
 fheight_path = 'data_example/2018LERZeruption_data.xlsx'
