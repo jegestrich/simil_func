@@ -87,6 +87,7 @@ _uafgeotools_ packages:
 Python packages:
 * [ObsPy](http://docs.obspy.org/)
 * [OpenPyXL](https://openpyxl.readthedocs.io/en/stable/#) (only necessary for [*example.py*](simil_func/example.py))
+* [Pandas](https://pandas.pydata.org/) (only necessary for [*example.py*](simil_func/example.py))
 
 
 Example
@@ -113,7 +114,7 @@ Authors
 -------
 
 (_Alphabetical order by last name._)
-
+David Fee
 Julia Gestrich
 
 <!--stackedit_data:
