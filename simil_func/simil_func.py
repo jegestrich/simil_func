@@ -491,3 +491,27 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, method='lm', norm_lm=None, norm
     else:
         ax = [ax0, ax1, axn, ax2]
     return fig, ax
+
+def simil_wave(spectrum, frequency, duration, sampling_rate, phase_distribution='uniform'):
+    '''
+    :param spectrum: not in dB
+    :param frequency: corresponding to spectrum
+    :param duration: target duration of waveform
+    :param sampling_rate: target sampling rate of waveform
+    :return: t: time arrray
+            T: waveform array
+    '''
+
+    # interpolate for specific duration and sampling rate for waveform
+    tck = scipy.interpolate.splrep(frequency, spectrum, s=0)
+    fnew = np.arange(1 / duration, sampling_rate / 2 + 1 / duration, 1 / duration)
+    Snew = scipy.interpolate.splev(fnew, tck, der=0)
+
+    Snew[0] = 0
+    if phase_distribution == 'uniform':
+        phases = np.random.uniform(low=0, high=2 * np.pi, size=len(Snew) - 2) * 1j
+    phase_dist = np.hstack([[0], phases, [0], np.conj(phases[:: -1])])
+    T = np.real(np.fft.ifft(np.hstack([Snew, Snew[-2: 0: -1]]) * phase_dist))
+    t = np.linspace(0,duration,len(T))
+
+    return t, T
