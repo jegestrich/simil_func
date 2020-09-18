@@ -8,7 +8,7 @@ from array_processing.algorithms.helpers import getrij
 from matplotlib import dates
 import matplotlib.pyplot as plt
 
-filepath = 'data_example/mseed_infra_July16-17/'
+filepath = 'data_example/mseed_infra_June16-17/'
 coord_file = 'data_example/local_infra_coords.json'
 network = 'HV'
 fheight_path = 'data_example/2018LERZeruption_data.xlsx'
@@ -67,6 +67,31 @@ while tend <= tend_abs:
     n = n+1
 
 print('Calculations are done.')
+
+#%%
+from scipy.io import savemat
+fmin_ind = np.where(fpsd>0.1)[0][0]
+fmax_ind = np.where(fpsd<20)[0][-1]
+mdic = {"dataAmp": 10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2, "dataF": fpsd[fmin_ind:fmax_ind], "label": "June-17 3:05"}
+savemat("spectrum_06-17_03_05.mat", mdic)
+mdic = {"dataAmp": 10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2, "dataF": fpsd[fmin_ind:fmax_ind], "label": "June-16 15:05"}
+savemat("spectrum_06-16_15_05.mat", mdic)
+#%%
+fig,ax = plt.subplots(1,1)
+ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2)
+ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2)
+ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2 - 10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2,'g')
+
+#ax.set_xlim(0.2,10)
+plt.show()
+
+fig,ax = plt.subplots(1,1)
+ax.plot(fpsd[fmin_ind:fmax_ind],P_mat[fmin_ind:fmax_ind,300])
+ax.plot(fpsd[fmin_ind:fmax_ind],P_mat[fmin_ind:fmax_ind,60])
+ax.set_xscale('log')
+#ax.set_xlim(0.2,10)
+plt.show()
+
 
 #%%
 fig,ax = sf.simil_plot(beam_all, tvec_all, SPL, P_mat, fpsd, tmid, norm_trf=norm_trf, sol_trf=sol_trf, method='trf')
