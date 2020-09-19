@@ -492,6 +492,51 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, method='lm', norm_lm=None, norm
         ax = [ax0, ax1, axn, ax2]
     return fig, ax
 
+def welch_man(waveform,sampling_rate, pref=20e-6):
+    fs = sampling_rate
+    window = 'hann'
+    win, nperseg = scipy.signal.spectral._triage_segments(window, len(waveform), input_length=waveform.shape[-1])
+    scale = 1.0 / (fs * (win * win).sum())
+    S = scipy.fft(win * waveform, n=len(waveform))#[0]
+    S = np.conjugate(S) * S #magnitude of complex number (same as abs()**2)
+    S *= scale
+    S[..., 1:] *= 2
+    S = S[:int(len(S) / 2)]
+    f = np.linspace(0, fs /2,len(S))
+
+    # PSD_W_man_dB = 10 * np.log10(PSD_W_man[1:len(f)] / pref**2)
+    return f, S
+
+def welch_wave(spectrum, frequency, duration, sampling_rate, phase_distribution='uniform'):
+
+    tck = scipy.interpolate.splrep(frequency, spectrum, s=0)
+    fnew = np.arange(1 / duration, sampling_rate / 2 + 1 / duration, 1 / duration)
+    Snew = scipy.interpolate.splev(fnew, tck, der=0)
+    Snew = np.append(0, Snew)
+    Snew = np.abs(Snew)
+
+    window = 'hann'
+    win, nperseg = scipy.signal.spectral._triage_segments(window, len(Snew) * 2 - 2, input_length=Snew.shape[-1] * 2 - 2)
+    scale = 1.0 / (fnew[-1] * 2 * (win * win).sum())
+
+    Snew[..., 1:] /= 2
+    Snew /= scale
+    Snew = Snew ** (1 / 2)
+
+    if phase_distribution == 'uniform':
+        phases = np.random.uniform(low=0, high=2 * np.pi, size=len(Snew) - 2) * 1j
+    phase_dist = np.hstack([[0], phases, [0], np.conj(phases[:: -1])])
+    T = np.real(np.fft.ifft(np.hstack([Snew, Snew[-2: 0: -1]]) * phase_dist))
+    # T = T / np.append(win[-1], win[1:])
+    t = np.linspace(0,duration,len(T))
+
+    # T = scipy.fftpack.irfft(Snew)
+    # T = T / np.append(win[-1], win[1:])
+    # Swv_old = T.copy()
+    T = np.append([0], T[1:])
+    return t, T
+
+
 def simil_wave(spectrum, frequency, duration, sampling_rate, phase_distribution='uniform'):
     '''
     :param spectrum: not in dB
@@ -501,17 +546,22 @@ def simil_wave(spectrum, frequency, duration, sampling_rate, phase_distribution=
     :return: t: time arrray
             T: waveform array
     '''
-
     # interpolate for specific duration and sampling rate for waveform
     tck = scipy.interpolate.splrep(frequency, spectrum, s=0)
     fnew = np.arange(1 / duration, sampling_rate / 2 + 1 / duration, 1 / duration)
     Snew = scipy.interpolate.splev(fnew, tck, der=0)
-
-    Snew[0] = 0
+    Snew = np.append(0, Snew)
     if phase_distribution == 'uniform':
         phases = np.random.uniform(low=0, high=2 * np.pi, size=len(Snew) - 2) * 1j
     phase_dist = np.hstack([[0], phases, [0], np.conj(phases[:: -1])])
     T = np.real(np.fft.ifft(np.hstack([Snew, Snew[-2: 0: -1]]) * phase_dist))
     t = np.linspace(0,duration,len(T))
-
     return t, T
+
+
+def simil_wave_reverse(waveform, time):
+    S = np.fft.fft(waveform)
+    S = (S * np.conj(S)) ** (1 / 2)
+    S = S[:int(len(S)/2)]
+    f = np.linspace(0,1/(2*np.diff(time)[0]),len(S))
+    return f, S
