@@ -359,16 +359,27 @@ def simil_fit(st, freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, method='lm', m0=M
         sol_trf_mat = np.array([np.array([sol_all_trf.x,sol_LST_trf.x,sol_FST_trf.x])]).T
         return beam, beamf, tvec, SPL, PSD, fpsd, sol_mat, sol_trf_mat, norm_m, norm_trf
 
-def misfit_spectrum(st_day,FREQ_vec, FREQ_vec_prob, baz, peaks='variable', fwidth=1):
+def misfit_spectrum(st_day,FREQ_vec, FREQ_vec_prob, baz, peaks='bound', fwidth=1):
     '''
-
     :param st_day: Steam object of data (one trace for each array element)
-    :param FREQ_vec:
-    :param FREQ_vec_prob:
-    :param baz:
-    :param peaks:
-    :param fwidth:
+    :param FREQ_vec: min frequency of first set of overlapping frequency bands (f_max = 10**fwidth * f_min)
+    :param FREQ_vec_prob: second set of not overlapping frequency bands
+    :param baz: (optional) backazimuth for array processing
+    :param peaks: ['variable','bound','constant'] 'variable': no restrictions for peak frequency;
+                    'bound': peak frequency is bound in a frequency band half the width of first frequency bands centered
+                    'constant': peak frequency is set to the center of the frequency band (in log space)
+    :param fwidth: defines width of overlqpping frequency bands (f_max = 10**fwidth * f_min)
     :return:
+    beam_all: beamformed pressure timeseries
+    tvec_all: times for beamformed pressure timeseries
+    P_mat: PSD matrix for frequencies `fpsd` and times `tmid`
+    fpsd: frequencies for P_mat
+    norm_trf: misfit values for each time tmid, each frequency band FREQ_vec and each simlarity spectrum
+    tmid: times
+    M: average misfit for each time tmid and each frequency in FREQ_vec_prob using combined LST&FST similarity spectrum
+    M_LST: average misfit for each time tmid and each frequency in FREQ_vec_prob using LST similarity spectrum
+    M_FST: average misfit for each time tmid and each frequency in FREQ_vec_prob using FST similarity spectrum
+    sol_trf: solution vectors for each fitting
     '''
     BEAM_WINDOW = 10*60
     OVERLAP = 0.7
