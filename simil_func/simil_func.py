@@ -654,12 +654,24 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, method='lm', norm_lm=None, norm
         ax2.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec/(60*60))))) #tick location
         if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
             axf.xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
+    elif np.abs(dt_sec / (60 * 60) - 1) < 0.5:
+        ax0.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
+        axn.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
+        ax2.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
+        if np.any([np.any([sol_lm != None]), np.any([sol_trf != None])]):
+            axf.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
+    elif dt_sec / (10 * 60) < 1:
+        ax0.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
+        axn.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
+        ax2.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
+        if np.any([np.any([sol_lm != None]), np.any([sol_trf != None])]):
+            axf.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
     elif dt_sec/(60*60) < 1:
-        ax0.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
-        axn.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
-        ax2.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec/60)))) #tick location
+        ax0.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 30))) #tick location
+        axn.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 30))) #tick location
+        ax2.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 30))) #tick location
         if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
-            axf.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, round(dt_sec / 60))))  # tick location
+            axf.xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
     ax2.xaxis.set_major_formatter(dates.DateFormatter("%m/%d-%H:%M")) # tick formats
     ######################################
     if np.any([np.any([sol_lm != None]),np.any([sol_trf != None])]):
@@ -677,13 +689,13 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, method='lm', norm_lm=None, norm
 
 
 
-def misfit_spec_plot(P_mat, fpsd, tmid, M_all, M_LST, M_FST, FREQ_vec_prob, mid_point = 4):
+def misfit_spec_plot(P_mat, fpsd, tmid, M, M_LST, M_FST, FREQ_vec_prob, mid_point = 4):
     '''
     Function to plot the misfit spectra produced with misfit_spectrum
     :param P_mat: Spectrogram
     :param fpsd: frequency for spectrogram
     :param tmid: time for spectrogram
-    :param M_all: Misfit spectrogram for LST&FST
+    :param M: Misfit spectrogram for LST&FST
     :param M_LST: Misfit spectrogram for LST
     :param M_FST: Misfit spectrogram for FST
     :param FREQ_vec_prob: frequency array for misfit spectrograms
@@ -734,7 +746,7 @@ def misfit_spec_plot(P_mat, fpsd, tmid, M_all, M_LST, M_FST, FREQ_vec_prob, mid_
 
     #Plot Misfit Spectrogram for LST&FST
     x, y = np.meshgrid(tmid, FREQ_vec_prob)
-    im = ax[1].pcolormesh(x, y, M_all, cmap=allcmp, vmin=2, vmax=2 * mid_point-2)
+    im = ax[1].pcolormesh(x, y, M, cmap=allcmp, vmin=2, vmax=2 * mid_point-2)
     ax[1].set_yscale('log')
     ax[1].axis('tight')
     ax[1].set_ylabel('Frequency [Hz]')
@@ -781,7 +793,7 @@ def misfit_spec_plot(P_mat, fpsd, tmid, M_all, M_LST, M_FST, FREQ_vec_prob, mid_
         ax[1].xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
         ax[2].xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
         ax[3].xaxis.set_major_locator(dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-    if np.abs(dt_sec / (60 * 60) - 1) < 0.5:
+    elif np.abs(dt_sec / (60 * 60) - 1) < 0.5:
         ax[0].xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
         ax[1].xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
         ax[2].xaxis.set_major_locator(dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
