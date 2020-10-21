@@ -14,9 +14,9 @@ network = 'HV'
 fheight_path = 'data_example/2018LERZeruption_data.xlsx'
 
 #%% starting
-tstart = obs.UTCDateTime('2018-6-16T12:00')
+tstart = obs.UTCDateTime('2018-6-16T15:00')
 tstart_abs = tstart
-tend = tstart + 24*60*60
+tend = tstart + 5*60*60
 tend_abs = tend
 
 st_day = read_local(filepath, coord_file, network, 'AF0','*','*', tstart, tend)
@@ -33,7 +33,7 @@ rij=getrij(latlist,lonlist)
 
 #%%
 BEAM_WINDOW = 10*60
-OVERLAP = 0.7
+OVERLAP = 0.5
 tstart = tstart_abs
 tend = tstart + BEAM_WINDOW
 n=0
@@ -68,32 +68,8 @@ while tend <= tend_abs:
 
 print('Calculations are done.')
 
-#%%
-from scipy.io import savemat
-fmin_ind = np.where(fpsd>0.1)[0][0]
-fmax_ind = np.where(fpsd<20)[0][-1]
-mdic = {"dataAmp": 10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2, "dataF": fpsd[fmin_ind:fmax_ind], "label": "June-17 3:05"}
-savemat("spectrum_06-17_03_05.mat", mdic)
-mdic = {"dataAmp": 10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2, "dataF": fpsd[fmin_ind:fmax_ind], "label": "June-16 15:05"}
-savemat("spectrum_06-16_15_05.mat", mdic)
-#%%
-fig,ax = plt.subplots(1,1)
-ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2)
-ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2)
-ax.plot(fpsd[fmin_ind:fmax_ind],10**(P_mat[fmin_ind:fmax_ind,300]/10) * (20e-6)**2 - 10**(P_mat[fmin_ind:fmax_ind,60]/10) * (20e-6)**2,'g')
 
-#ax.set_xlim(0.2,10)
-plt.show()
-
-fig,ax = plt.subplots(1,1)
-ax.plot(fpsd[fmin_ind:fmax_ind],P_mat[fmin_ind:fmax_ind,300])
-ax.plot(fpsd[fmin_ind:fmax_ind],P_mat[fmin_ind:fmax_ind,60])
-ax.set_xscale('log')
-#ax.set_xlim(0.2,10)
-plt.show()
-
-
-#%%
+#%% plot similarity misfit etc.
 fig,ax = sf.simil_plot(beam_all, tvec_all, SPL, P_mat, fpsd, tmid, norm_trf=norm_trf, sol_trf=sol_trf, method='trf')
 
 #optional plotting of fountain height and cone height
@@ -127,3 +103,19 @@ if tmid[-1] < dates.date2num(dtime_cam.iloc[-1]):
     axx.set_ylabel('Height [m]', color='orange')
     axx.tick_params(axis='y', colors='orange')
     axx.legend(loc='upper left', bbox_to_anchor=(1.1,0.4), borderaxespad=0.)
+
+plt.show()
+
+#%% calculate misfit spectrum
+nf1 = 20
+FREQ_vec = 10**(np.linspace(np.log10(0.0166),np.log10(25/10),nf1))#np.logspace(-2,2,7)np.log10(st_day[0].stats.sampling_rate / 2)
+nf = 150
+FREQ_vec_prob = 10 ** (np.linspace(np.log10(0.0166), np.log10(25), nf))
+
+beam_all, tvec_all, P_mat, fpsd, norm_trf, tmid, M, M_LST, M_FST, sol_trf = sf.misfit_spectrum(st_day, FREQ_vec, FREQ_vec_prob, 121, peaks='bound', fwidth=1)
+
+#%% plot misfit spectrum
+fig, ax = sf.misfit_spec_plot(P_mat, fpsd, tmid, M, M_LST, M_FST, FREQ_vec_prob, mid_point = 4)
+plt.show()
+
+
