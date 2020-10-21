@@ -12,9 +12,10 @@ Included functions in `simil_func.py`:
 
 **Fitting**:
 * `simil_fit()`: Tool for automated fitting of similarity spectra (LST & FST) to a given spectrum using non-linear least squares fitting and root-mean-square error as misfit function (`misfit()`)
-
+* `misfit_spectrum()`: Function to calculate a misfit spectrogram. It uses the fitting tool `simil_fit()` for overlapping frequency bands and averages the misfit for a frequency array.
 **Plotting**:
 * `simil_plot()`: Plotting tool for the results of `simil_fit()`. Plots spectrogram of original (unfiltered) data and associated (filtered) waveform and spund pressure level (SPL) as well as time series of similarity spectra misfits.
+* `misfit_spec_plot()`: Plotting tool for the misfit spectrograms calculated with `misfit_spectrum()`
 
 **References**
 *Tam, C. K. W., Golebiowski, M., & Seiner, J. M. (1996). On the Two Components of Turbulent Mixing Noise from Supersonic Jets. American Institute of Aeronautics and Astronautics.*
