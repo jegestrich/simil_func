@@ -114,9 +114,9 @@ $ python
 Authors
 -------
 
-(_Alphabetical order by last name._)
-David Fee
-Julia Gestrich
+(_Alphabetical order by last name._)<br/>
+David Fee<br/>
+Julia Gestrich<br/>
 
 <!--stackedit_data:
 eyJwcm9wZXJ0aWVzIjoiZXh0ZW5zaW9uczpcbiAgcHJlc2V0Oi
