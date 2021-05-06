@@ -578,6 +578,12 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                     b1 = bounds[0]
                     b2 = bounds[1]
                 m0 = np.array([0, 0, f_p, f_p])
+                if f_p < b1[3]:
+                    m0[2] = b1[2]
+                    m0[3] = b1[3]
+                if f_p > b2[3]:
+                    m0[2] = b2[2]
+                    m0[3] = b2[3]
                 BOUNDS = (b1, b2)
 
             # print(freqmin, freqmax)
@@ -585,6 +591,7 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
             if np.all(PSD_f == None):
                 st = stream.copy()
                 st.trim(starttime=tstart, endtime=tend)
+                # print(m0)
                 beam, tvec, PSD, fpsd, sol_m_temp, norm_m_temp = simil_fit(stream=st, response=response, freqmin=freqmin,
                                                                                    freqmax=freqmax, m0=m0, baz=baz,
                                                                                    peaks=PEAKS, model=model,
@@ -684,11 +691,25 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
     elif np.all(stream==None):
         return norm_m, M, sol_m
 
+def misfit_diff(M, threshold):
+    '''
+    
+    :param M: The first dimension is 2
+    :return: 
+    '''
+    M_diff = M[1, :, :] - M[0, :, :]
+    M_diff = np.zeros(np.shape(M[1, :, :]))
+    M_diff[:] = np.NaN
+    M_diff[np.any([M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)] = M[1, :, :][np.any(
+        [M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)] - M[0, :, :][np.any(
+        [M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)]
+    # M_all = np.concatenate((M, np.array([M_diff])), axis=0)  # [M[0,:,:],M_LST,M_FST,M_diff
+    return M_diff
 
 COLOR_SEQUENCE = np.array(['green', 'red', 'blue', 'magenta', 'cyan', 'orange'])
 
 
-def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FREQMIN, freqmax=FREQMAX,
+def simil_plot(beam, tvec, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FREQMIN, freqmax=FREQMAX,
                colorstring=np.array(['green', 'red', 'blue', 'magenta', 'cyan', 'orange']),
                labelstring=np.array(['LST&FST', 'LST', 'FST', 'polynomial']), powerlim='default'):
     import matplotlib.pyplot as plt
@@ -751,14 +772,14 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FR
     ax1.plot(tvec, beam, 'k', linewidth=0.5)
     ax1.set_ylabel('Pa')
     ######## SPL (same subplot as waveform) ###########
-    axn = ax1.twinx()
-    axn.plot(tmid, SPL, 'yellowgreen')
-    YLIMn = axn.get_ylim()
-    axn.set_xticklabels([])
-    axn.set_xlim([tmid[0], tmid[-1]])
-    axn.grid()
-    axn.set_ylabel('SPL [dB]', color='yellowgreen')
-    axn.tick_params(axis='y', colors='yellowgreen')
+    # axn = ax1.twinx()
+    # axn.plot(tmid, SPL, 'yellowgreen')
+    # YLIMn = axn.get_ylim()
+    # axn.set_xticklabels([])
+    # axn.set_xlim([tmid[0], tmid[-1]])
+    # axn.grid()
+    # axn.set_ylabel('SPL [dB]', color='yellowgreen')
+    # axn.tick_params(axis='y', colors='yellowgreen')
     ######## Peak Frequency ##########################
     if np.any([sol_lm != None]):
         axf = fig.add_subplot(gs[2, :])
@@ -795,8 +816,6 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FR
     if dt_sec / (60 * 60) >= 1:
         ax0.xaxis.set_major_locator(
             matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-        axn.xaxis.set_major_locator(
-            matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
         ax2.xaxis.set_major_locator(
             matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
         if np.any([sol_lm != None]):
@@ -804,35 +823,32 @@ def simil_plot(beam, tvec, SPL, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FR
                 matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
     elif np.abs(dt_sec / (60 * 60) - 1) < 0.5:
         ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
-        axn.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
         ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
         if np.any([sol_lm != None]):
             axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
     elif dt_sec / (10 * 60) < 1:
         ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
-        axn.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
         ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
         if np.any([sol_lm != None]):
             axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
     elif dt_sec / (60 * 60) < 1:
         ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
-        axn.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
         ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
         if np.any([sol_lm != None]):
             axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
     ax2.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%m/%d-%H:%M"))  # tick formats
     ######################################
     if np.any([sol_lm != None]):
-        ax2.get_shared_x_axes().join(ax2, ax0, axn, axf)
+        ax2.get_shared_x_axes().join(ax2, ax0, axf)
     else:
-        ax2.get_shared_x_axes().join(ax2, ax0, axn)
+        ax2.get_shared_x_axes().join(ax2, ax0)
     fig.suptitle(str(matplotlib.dates.num2date(tmid[0])).replace(':', '_')[:10], y=0.95)
     plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
     fig.autofmt_xdate()
     if np.any([sol_lm != None]):
-        ax = [ax0, ax1, axn, axf, ax2]
+        ax = [ax0, ax1, axf, ax2]
     else:
-        ax = [ax0, ax1, axn, ax2]
+        ax = [ax0, ax1, ax2]
     return fig, ax
 
 
