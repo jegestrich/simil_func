@@ -8,19 +8,6 @@ import matplotlib
 import obspy as obs
 
 
-def poly3d(m, f):
-    """
-    function to calculate 3rd order polynomial for a frequency band
-    :param m: array_like, shape (4,): model parameters for 3rd order polynomial x**3*m[0] + x**2*m[1] + x*m[2] + m[3]
-    :param f: array_like, shape (M,): frequency array
-    :return:
-    :param F: amplitude in Hz/Pa (not dB)
-    """
-    Flog = np.log10(f) ** 3 * m[0] + np.log10(f) ** 2 * m[1] + np.log10(f) * m[2] + m[3]
-    F = 10 ** (Flog / 10)
-    return F
-
-
 def GF(f, fL=None, fF=None, output='GF'):
     '''
     Helper function to calculate the parameters F and G from 
@@ -154,26 +141,6 @@ def simil_func(m, f, p=20e-6, output='dB', model='LSTFST', **kwargs):
             S = np.exp(b) * G
             return S
 
-    if model == 'poly3d':
-        F = poly3d(m, f)
-        if output == 'dB':
-            SdB = 10 * np.log10(F)  # - 20 * np.log10(p)
-            return SdB
-        elif output == 'orig':
-            S = F
-            return S
-
-    # if model == 'poly2fun':
-    #     a = m[0]
-    #     m0 = m[1:]
-    #     F = poly2fun(m0,  f)
-    #     if output == 'dB':
-    #         SdB = 10 * np.log10(10**(a) * F) - 20 * np.log10(p)
-    #         return SdB
-    #     elif output == 'orig':
-    #         S = 10**(a) * F
-    #         return S
-
 
 def misfit(m, f, d, model='LSTFST', **kwargs):
     '''
@@ -188,11 +155,8 @@ def misfit(m, f, d, model='LSTFST', **kwargs):
     OUTPUT:
     M: [array like, equal length to f and d] std between data and similarity spectrum
     '''
-    # if input == 'total':
     S = simil_func(m, f, model=model, **kwargs)
     S = np.reshape(S, np.shape(d))
-    # sig = (1.1 - scipy.signal.gaussian(len(d), std=len(d)/3))
-    # sig = sig/ np.sum(sig) * len(d)
     M = ((1 / len(d)) ** (1 / 2) * np.abs(d - S)).squeeze() #/ sig
     return M
 
@@ -211,11 +175,7 @@ def misfit_peak(m0, f, d, fc, model='LSTFST', **kwargs):
     M: [array like, equal length to f and d] std between data and similarity spectrum
     '''
     m = np.append(m0, fc)
-    # print(m0)
-    # print(fc)
-    # print(m)
     S = simil_func(m, f, model=model, **kwargs)
-
     S = np.reshape(S, np.shape(d))
     M = ((1 / len(d)) ** (1 / 2) * (d - S)).squeeze()
     return M
@@ -237,10 +197,6 @@ def myinterp(x, y, der=0, s=0):
     xnew = 10 ** (np.arange(np.log10(x[0]), np.log10(x[-1]), np.log10(x[-1] / x[0]) / x.size))
     ynew = scipy.interpolate.splev(xnew, tck, der=der)
     return xnew, ynew
-
-
-
-
 
 FREQMAX = 10
 FREQMIN = 0.3
@@ -323,15 +279,6 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
                 data[:, i] = st[i].data
             beam = beamForm(data, rij, sampling_rate, baz, M=len(tvec))  # unfiltered beamformed data
 
-        #     dataf = np.zeros((len(stf[0].data), len(stf)))
-        #     for i in range(len(stf)):
-        #         dataf[:, i] = stf[i].data
-        #     beamf = beamForm(dataf, rij, stf[0].stats.sampling_rate, baz,
-        #                      M=len(tvec))  # filtered beamformed data (used for SPL)
-        #
-        # p_rms = np.sqrt(np.nanmean(beamf[beamf != 0] ** 2))
-        # SPL = 10 * np.log10(p_rms ** 2 / pref ** 2)  # sound pressure level
-
         ## Calculate PSD
         fpsd_o, PSD_o = scipy.signal.welch(beam, sampling_rate,
                                            nperseg=PSD_win)  # calculate PSD with Welch's method
@@ -339,11 +286,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
         fpsd, PSD = myinterp(fpsd_o[1:], PSDdB_o[
                                          1:])  # interpolateing to have equal spacing in log10 frequency space (important for equal fitting of low and high frequencies)
         mnum = np.argmin(np.abs((np.log10(fpsd) - np.log10(fpsd[0])) - 0.125))
-        # print('mnum= ' + str(mnum))
-        # print(np.shape(PSD))
-        # return PSD
         PSD[mnum:-mnum] = pd.DataFrame(PSD).rolling(mnum, axis=0, center=True).median().to_numpy()[mnum:-mnum].squeeze()
-
 
     elif stream == None:
         fpsd = PSD_f[0]
@@ -417,7 +360,6 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
                 sol_temp = np.zeros(4)
                 sol_temp[[0,1]] = sol_temp0.x
                 sol_temp[[2,3]] = fc
-                # print(np.shape(norm_temp))
             if i == 0:
                 sol_all = np.array([sol_temp])
                 norm_all = np.array([norm_temp])
@@ -428,14 +370,6 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
             return sol_all, norm_all.squeeze()
         else:
             return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
-    # if model == 'poly3d':
-    #     z = np.polyfit(np.log10(f.squeeze()), d.squeeze(), 3)
-    #     sol_all = np.asarray(np.poly1d(z))
-    #     norm_m = np.transpose(
-    #         [np.array([np.dot(misfit(sol_all, f, d, model='poly3d'), misfit(sol_all, f, d, model='poly3d'))])]) ** (
-    #                          1 / 2)
-    #     return beam, beamf, tvec, SPL, PSD, fpsd, sol_all, norm_m.squeeze()
-
     else:
         for i in range(len(model)):
             if model[i] == 'poly3d':
@@ -443,11 +377,8 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
                 sol_temp = np.asarray(np.poly1d(z))
                 norm_temp = np.asarray([np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
                                  1 / 2)])
-                # print(norm_temp)
             elif model[i] == 'LST':
 
-                # print(m)yY8U93z01yyh
-                # print(m0[[0,2]])
                 a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
                 m_try = np.array([a0, m0[2]])
                 if peaks == 'variable':
@@ -482,7 +413,6 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
                                                     kwargs={'model': model[i]})
                 norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
                 sol_temp = sol_temp0.x
-                # print(np.shape(norm_temp))
             if i == 0:
                 sol_all = np.array([sol_temp])
                 norm_all = np.array([norm_temp])
@@ -545,9 +475,6 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
     timen = (tend_abs - tstart) / (wwidth * (1 - overlap))
 
     while tend <= tend_abs:
-        # if tmid[n] != matplotlib.dates.date2num((tstart + wwidth / 2).datetime):
-        #     print('wrong time!: ', obs.UTCDateTime(matplotlib.dates.num2date(tmid[n])), (tstart + wwidth / 2).datetime)
-
         for iif in range(len(FREQ_vec)):
             freqmin = FREQ_vec[iif]
             freqmax = freqmin * 10 ** fwidth
@@ -585,13 +512,9 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                     m0[2] = b2[2]
                     m0[3] = b2[3]
                 BOUNDS = (b1, b2)
-
-            # print(freqmin, freqmax)
-            # print(BOUNDS)
             if np.all(PSD_f == None):
                 st = stream.copy()
                 st.trim(starttime=tstart, endtime=tend)
-                # print(m0)
                 beam, tvec, PSD, fpsd, sol_m_temp, norm_m_temp = simil_fit(stream=st, response=response, freqmin=freqmin,
                                                                                    freqmax=freqmax, m0=m0, baz=baz,
                                                                                    peaks=PEAKS, model=model,
@@ -676,10 +599,6 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                     ind2 = ind2 + 1
                 weight_temp = np.nanmean(weights[ind1:ind2])
                 for im in range(len(model)):
-                    #
-                    # norm_w = weights * norm_m[im, j, iit]
-                    # print(np.shape(M))
-                    # print(np.shape(norm_m))
                     M[im, i, iit] = M[im, i, iit] + (overlap2 * weight_temp * norm_m[im, j, iit])
                 l = l + overlap2 * weight_temp
 
@@ -703,404 +622,5 @@ def misfit_diff(M, threshold):
     M_diff[np.any([M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)] = M[1, :, :][np.any(
         [M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)] - M[0, :, :][np.any(
         [M[1, :, :] < threshold, M[0, :, :] < threshold], axis=0)]
-    # M_all = np.concatenate((M, np.array([M_diff])), axis=0)  # [M[0,:,:],M_LST,M_FST,M_diff
+
     return M_diff
-
-COLOR_SEQUENCE = np.array(['green', 'red', 'blue', 'magenta', 'cyan', 'orange'])
-
-
-def simil_plot(beam, tvec, PSD, fpsd, tmid, norm_M, sol_lm=None, freqmin=FREQMIN, freqmax=FREQMAX,
-               colorstring=np.array(['green', 'red', 'blue', 'magenta', 'cyan', 'orange']),
-               labelstring=np.array(['LST&FST', 'LST', 'FST', 'polynomial']), powerlim='default'):
-    import matplotlib.pyplot as plt
-    import numpy.matlib
-    '''
-    INPUT
-    beam: [array (n,)] beamformed waveform, data point for every time in tvec
-    tvec: [array (n,)] time vector for beam
-    SPL: [array (m,)] sound pressure level, data point for every time in tmid   
-    PSD: [matrix (nf,m)] array of PSDs for times tmid
-    fpsd: [array (nf,)] array of frequencies for PSD
-    tmid: [array (m,)] array of times for PSD and SPL
-    norm_M: [array (3,m)] misfit norm calculated with simil_fit, only use *_lm or *_trf when method includes them
-    sol_lm [array (5,3,m)] solution model parameters calculated with simil_fit, only use *_lm or *_trf when method includes them
-    freqmin, freqmax [float] frequency min and max for fitting (defaults to 0.3-10Hz)
-    
-    OUTPUT:
-    fig: [matplotlib figure object]
-    ax: [array of matplotlib acis objects] 
-   
-    '''
-    if len(np.shape(norm_M)) == 1:
-        norm_M = np.array([norm_M])
-    if len(np.shape(sol_lm)) == 2:
-        sol_lm = np.array([sol_lm])
-
-    if powerlim == 'default':
-        Pmax = np.max(np.max(PSD[np.all([fpsd < FREQMAX, fpsd > FREQMIN], axis=0), :]))
-        Pmin_avg = np.median(np.min(PSD[np.all([fpsd < FREQMAX, fpsd > FREQMIN], axis=0), :]))
-        powerlim = np.array([Pmin_avg, Pmax])
-
-    fig = plt.figure(constrained_layout=True, figsize=(10, 6))
-    if np.any([sol_lm != None]):
-        gs = fig.add_gridspec(5, 2)
-    else:
-        gs = fig.add_gridspec(4, 2)
-    ######## Spectrogram #####################
-    ax0 = fig.add_subplot(gs[0, :])
-    ax0.set_yscale('log')
-    im = ax0.pcolormesh(tmid, fpsd, PSD, cmap='magma')
-    im.set_clim([powerlim[0], powerlim[1]])
-    ax0.axis('tight')
-    ax0.set_xticklabels([])
-    ax0.set_yticks(np.logspace(-1, 2, 4))
-    ax0.set_ylim([0.1, 50])
-    ax0.plot([tmid[0], tmid[-1]], [freqmin, freqmin], 'w--', linewidth=0.8)
-    ax0.plot([tmid[0], tmid[-1]], [freqmax, freqmax], 'w--', linewidth=0.8)
-    Pmax_ind = np.asarray([np.argmax(PSD[np.all([fpsd < freqmax, fpsd > freqmin], axis=0), :], axis=0)[i] for i in
-                           range(len(tmid))]).squeeze()
-    freqmin_ind = np.where(np.abs(fpsd - freqmin) == np.min(np.abs(fpsd - freqmin)))
-
-    ax0.plot(tmid, fpsd[Pmax_ind + freqmin_ind].squeeze(), 'w.', markersize=2)
-    ax0.set_ylabel('Frequency [Hz]')
-    ax0.grid()
-    cax = plt.axes([0.84, 0.76, 0.025, 0.14])
-    hc = plt.colorbar(im, cax)  # ,cax=cax
-    hc.set_label('Power [dB]')
-    ######## Waveform #######################
-    ax1 = fig.add_subplot(gs[1, :])
-    ax1.plot(tvec, beam, 'k', linewidth=0.5)
-    ax1.set_ylabel('Pa')
-    ######## SPL (same subplot as waveform) ###########
-    # axn = ax1.twinx()
-    # axn.plot(tmid, SPL, 'yellowgreen')
-    # YLIMn = axn.get_ylim()
-    # axn.set_xticklabels([])
-    # axn.set_xlim([tmid[0], tmid[-1]])
-    # axn.grid()
-    # axn.set_ylabel('SPL [dB]', color='yellowgreen')
-    # axn.tick_params(axis='y', colors='yellowgreen')
-    ######## Peak Frequency ##########################
-    if np.any([sol_lm != None]):
-        axf = fig.add_subplot(gs[2, :])
-        freqmin_ind = np.where(np.abs(fpsd - freqmin) == np.min(np.abs(fpsd - freqmin)))
-        for i in range(3):
-            Pmax_lm_ind = np.asarray(
-                [np.where(simil_func(sol_lm[:, i, j], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)] ==
-                          np.max(simil_func(sol_lm[:, i, j], fpsd)[np.all([fpsd < freqmax, fpsd > freqmin], axis=0)],
-                                 axis=0))[0] for j in range(len(tmid))]).squeeze()
-            fmax_lm = fpsd[freqmin_ind + Pmax_lm_ind].squeeze()
-            axf.plot(tmid, fmax_lm, '.-', color=colorstring[i])
-        axf.plot(tmid, fpsd[Pmax_ind + freqmin_ind].squeeze(), 'k.', label='f$_{peak}$(data)')
-        axf.set_ylabel('Peak Frequency')
-        axf.legend(loc='upper left', bbox_to_anchor=(1.1, 1), borderaxespad=0.)
-        axf.set_xlim([tmid[0], tmid[-1]])
-        axf.set_xticklabels([])
-    ######## Misfit ##################################
-    if np.any([sol_lm != None]):
-        ax2 = fig.add_subplot(gs[3:, :])
-    else:
-        ax2 = fig.add_subplot(gs[2:, :])
-    for i in range(len(norm_M)):
-        ax2.plot(tmid, norm_M[i], '-', color=colorstring[i], linewidth=1, label=labelstring[i])
-    YLIM2 = ax2.get_ylim()
-    ax2.set_ylim(YLIM2)
-    ax2.tick_params(axis='x', which='major', labelsize=10, rotation=45, left=True)
-    ax2.set_ylabel('Misfit Norm')
-    ax2.grid()
-    ax2.legend(loc='upper left', bbox_to_anchor=(1.1, 1), borderaxespad=0.)
-    ax2.set_xlim([tmid[0], tmid[-1]])
-    ##### time ticks ####################
-    duration = (matplotlib.dates.num2date(tmid[-1]) - matplotlib.dates.num2date(tmid[0]))
-    dt_sec = duration.total_seconds() / 6
-    if dt_sec / (60 * 60) >= 1:
-        ax0.xaxis.set_major_locator(
-            matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-        ax2.xaxis.set_major_locator(
-            matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-        if np.any([sol_lm != None]):
-            axf.xaxis.set_major_locator(
-                matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-    elif np.abs(dt_sec / (60 * 60) - 1) < 0.5:
-        ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
-        ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
-        if np.any([sol_lm != None]):
-            axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
-    elif dt_sec / (10 * 60) < 1:
-        ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
-        ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
-        if np.any([sol_lm != None]):
-            axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
-    elif dt_sec / (60 * 60) < 1:
-        ax0.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
-        ax2.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
-        if np.any([sol_lm != None]):
-            axf.xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
-    ax2.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%m/%d-%H:%M"))  # tick formats
-    ######################################
-    if np.any([sol_lm != None]):
-        ax2.get_shared_x_axes().join(ax2, ax0, axf)
-    else:
-        ax2.get_shared_x_axes().join(ax2, ax0)
-    fig.suptitle(str(matplotlib.dates.num2date(tmid[0])).replace(':', '_')[:10], y=0.95)
-    plt.subplots_adjust(bottom=0.1, right=0.8, top=0.9)
-    fig.autofmt_xdate()
-    if np.any([sol_lm != None]):
-        ax = [ax0, ax1, axf, ax2]
-    else:
-        ax = [ax0, ax1, ax2]
-    return fig, ax
-
-
-def misfit_spec_plot(PSD, fpsd, tmid, M, FREQ_vec_prob, wf='None', powerlim='default', mid_point='default',
-                     extend='default', wflim='default', show_models=False, labels=['LST & FST', 'LST', 'FST', 'FST - LST']):
-    '''
-    Function to plot the misfit spectra produced with misfit_spectrum
-    :param PSD: Spectrogram
-    :param fpsd: frequency for spectrogram
-    :param tmid: time for spectrogram
-    :param M: Misfit spectrogram for LST&FST
-    :param M_LST: Misfit spectrogram for LST
-    :param M_FST: Misfit spectrogram for FST
-    :param FREQ_vec_prob: frequency array for misfit spectrograms
-    :param mid_point: Misfit value to center the colorbar on
-    :return:
-    '''
-    import matplotlib
-    from matplotlib.colors import ListedColormap
-    import matplotlib.pyplot as plt
-    from matplotlib import cm
-
-    if wflim == 'default':
-        wflim = np.array([np.nanmin(wf[1]), np.nanmax(wf[1])])
-    if powerlim == 'default':
-        Pmax = np.max(np.max(PSD[np.all([fpsd < FREQMAX, fpsd > FREQMIN], axis=0), :]))
-        Pmin_avg = np.median(np.min(PSD[np.all([fpsd < FREQMAX, fpsd > FREQMIN], axis=0), :]))
-        powerlim = np.array([Pmin_avg, Pmax])
-    if mid_point == 'default':
-        mid_point = np.round(np.nanmean([M])) - np.round(np.nanstd([M]))
-    if extend == 'default':
-        extend = 2 * np.round(np.nanstd([M]))
-
-    top = cm.get_cmap('Greys', 128)
-    bottom = cm.get_cmap('Blues', 128)
-    newcolors = np.vstack((bottom(np.linspace(1, 0, 128)), top(np.linspace(0, 1, 128))))
-    FSTcmp = ListedColormap(newcolors, name='GreyBlue')
-
-    top = cm.get_cmap('Greys', 128)
-    bottom = cm.get_cmap('Reds', 128)
-    newcolors = np.vstack((bottom(np.linspace(1, 0, 128)), top(np.linspace(0, 1, 128))))
-    LSTcmp = ListedColormap(newcolors, name='GreyRed')
-
-    top = cm.get_cmap('Greys', 128)
-    bottom = cm.get_cmap('Greens', 128)
-    newcolors = np.vstack((bottom(np.linspace(1, 0, 128)), top(np.linspace(0, 1, 128))))
-    allcmp = ListedColormap(newcolors, name='GreyGreen')
-
-    newcmp0 = cm.get_cmap('RdYlBu', 128)
-    # newcmp1 = cm.get_cmap('gist_earth', 128)
-    # newcmp2 = cm.get_cmap('gist_earth', 128)
-    newcmp = ListedColormap(newcmp0(np.linspace(0, 1, 128)), name='GreyGreen')
-    # LSTcmp = ListedColormap(newcmp1(np.linspace(1,0,128)), name='GreyRed')
-    # FSTcmp = ListedColormap(newcmp2(np.linspace(1,0,128)), name='GreyBlue')
-    if show_models == True:
-        CMP = [allcmp, LSTcmp, FSTcmp, 'seismic']
-        vmin_vec = [np.nanmax([mid_point - extend, 0]), np.nanmax([mid_point - extend, 0]),
-                    np.nanmax([mid_point - extend, 0]), -extend]
-        vmax_vec = [mid_point + extend, mid_point + extend, mid_point + extend, extend]
-        ticks_model = [mid_point - 1 * np.nanmin([np.round(np.nanstd([M])), np.round(extend * 0.8, decimals=1)]),
-                       mid_point,
-                       mid_point + 1 * np.nanmin([np.round(np.nanstd([M])), np.round(extend * 0.8, decimals=1)])]
-        ticks_diff = [-0.8 * extend, 0, 0.8 * extend]
-        ticks_vec = [ticks_model, ticks_model, ticks_model, ticks_diff]
-    else:
-        CMP = ['seismic']
-        vmin_vec = [-extend]
-        vmax_vec = [extend]
-        ticks_diff = [-0.8 * extend, 0, 0.8 * extend]
-        ticks_vec = [ticks_diff]
-        labels = ['FST - LST']
-
-
-    if wf != 'None':
-        nplots = len(M) + 2
-    else:
-        nplots = len(M) + 1
-
-    fig, ax = plt.subplots(nplots, 1, figsize=(14 * 0.6, (len(M) + 1) * 1.4))
-    pn = 0
-    if wf != 'None':
-        ax[pn].plot(wf[0], wf[1], 'k', linewidth=0.2)
-        ax[pn].set_ylabel('Pressure [Pa]')
-        ax[pn].set_ylim(wflim)
-        ax[pn].set_xlim([wf[0][0], wf[0][-1]])
-        ax[pn].set_xticklabels([])
-        pn = 1
-    # Plot Spectrogram
-    ax[pn].set_yscale('log')
-    im = ax[pn].pcolormesh(tmid, fpsd, PSD, cmap='magma', vmin=powerlim[0], vmax=powerlim[1])
-    ax[pn].axis('tight')
-    ax[pn].set_xticklabels([])
-    # ax[0].set_ylabel('Frequency [Hz]')
-    # ax[0].grid()
-    # cax = plt.axes([0.92, 0.72, 0.02, 0.16])
-    hc = plt.colorbar(im, ax=ax[pn], aspect=6)  # ,cax=cax
-    hc.set_label('Power [dB]')
-    ax[pn].set_xlim([tmid[0], tmid[-1]])
-    # Plot Misfit Spectrogram for LST&FST
-    for i in range(len(M)):
-        x, y = np.meshgrid(tmid, FREQ_vec_prob)
-        # current_cmap = matplotlib.cm.get_cmap()
-        plt.get_cmap(CMP[i]).set_bad(color='grey')
-        im = ax[pn + i + 1].pcolormesh(x, y, M[i], cmap=CMP[i], vmin=vmin_vec[i], vmax=vmax_vec[i])
-        # current_cmap = matplotlib.cm.get_cmap()
-        # current_cmap.set_bad(color='k')
-        ax[pn + i + 1].set_yscale('log')
-        ax[pn + i + 1].axis('tight')
-        # ax[i+1].set_ylabel('Frequency [Hz]')
-        ax[pn + i + 1].set_xticklabels([])
-        # fig.colorbar(pcm, ax=ax)
-        # cax = plt.axes([0.92, 1 - (i*0.8+1)/len(M), 0.02, 0.16])
-        hc = plt.colorbar(im, ax=ax[pn + i + 1], aspect=6, ticks=ticks_vec[i])  # ,cax=cax
-        hc.set_label(labels[i])
-        ax[pn + i + 1].set_ylim([FREQ_vec_prob[0], FREQ_vec_prob[-1]])
-        ax[pn + i + 1].set_xlim([tmid[0], tmid[-1]])
-        # ax[i+1].grid()
-    fig.text(0.07, (1-1/nplots)/2, 'Frequency [Hz]', va='center', rotation='vertical')
-    if show_models == True:
-        fig.text(.88, (1-2/nplots)/2, 'Misfit', va='center', rotation='vertical')
-    if wf != 'default':
-        pos = ax[1].get_position()
-        pos2 = ax[0].get_position()
-        ax[0].set_position([pos.x0, pos2.y0, pos.width, pos2.height])
-    # Time Ticks
-    duration = (matplotlib.dates.num2date(tmid[-1]) - matplotlib.dates.num2date(tmid[0]))
-    dt_sec = duration.total_seconds() / 6
-    for i in range(nplots):
-        if dt_sec / (60 * 60) >= 1:
-            ax[i].xaxis.set_major_locator(
-                matplotlib.dates.HourLocator(byhour=range(0, 24, round(dt_sec / (60 * 60)))))  # tick location
-        elif np.abs(dt_sec / (60 * 60) - 1) < 0.5:
-            ax[i].xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 60)))  # tick location
-        elif dt_sec / (5 * 60) < 1:
-            ax[i].xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 5)))  # tick location
-        elif dt_sec / (10 * 60) < 1:
-            ax[i].xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 10)))  # tick location
-        elif dt_sec / (60 * 60) < 1:
-            ax[i].xaxis.set_major_locator(matplotlib.dates.MinuteLocator(byminute=range(0, 60, 30)))  # tick location
-    ax[-1].xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%m/%d-%H:%M"))  # tick formats
-    for tick in ax[-1].get_xticklabels():
-        tick.set_rotation(10)
-    return fig, ax
-
-
-def welch_man(waveform, sampling_rate, pref=20e-6):
-    fs = sampling_rate
-    window = 'hann'
-    win, nperseg = scipy.signal.spectral._triage_segments(window, len(waveform), input_length=waveform.shape[-1])
-    scale = 1.0 / (fs * (win * win).sum())
-    S = scipy.fft(win * waveform, n=len(waveform))  # [0]
-    S = np.conjugate(S) * S  # magnitude of complex number (same as abs()**2)
-    S *= scale
-    S[..., 1:] *= 2
-    S = S[:int(len(S) / 2)]
-    f = np.linspace(0, fs / 2, len(S))
-
-    # PSD_W_man_dB = 10 * np.log10(PSD_W_man[1:len(f)] / pref**2)
-    return f, S
-
-
-def welch_wave(spectrum, frequency, duration, sampling_rate, phase_distribution='uniform'):
-    tck = scipy.interpolate.splrep(frequency, spectrum, s=0)
-    fnew = np.arange(1 / duration, sampling_rate / 2 + 1 / duration, 1 / duration)
-    Snew = scipy.interpolate.splev(fnew, tck, der=0)
-    Snew = np.append(0, Snew)
-    Snew = np.abs(Snew)
-
-    window = 'hann'
-    win, nperseg = scipy.signal.spectral._triage_segments(window, len(Snew) * 2 - 2,
-                                                          input_length=Snew.shape[-1] * 2 - 2)
-    scale = 1.0 / (fnew[-1] * 2 * (win * win).sum())
-
-    Snew[..., 1:] /= 2
-    Snew /= scale
-    Snew = Snew ** (1 / 2)
-
-    if phase_distribution == 'uniform':
-        phases = np.random.uniform(low=0, high=2 * np.pi, size=len(Snew) - 2) * 1j
-    phase_dist = np.hstack([[0], phases, [0], np.conj(phases[:: -1])])
-    T = np.real(np.fft.ifft(np.hstack([Snew, Snew[-2: 0: -1]]) * phase_dist))
-    t = np.linspace(0, duration, len(T))
-
-    T = np.append([0], T[1:])
-    return t, T
-
-
-def simil_wave(spectrum, frequency, duration, sampling_rate, phase_distribution='uniform'):
-    '''
-    :param spectrum: not in dB
-    :param frequency: corresponding to spectrum
-    :param duration: target duration of waveform
-    :param sampling_rate: target sampling rate of waveform
-    :return: t: time arrray
-            T: waveform array
-    '''
-    # interpolate for specific duration and sampling rate for waveform
-    tck = scipy.interpolate.splrep(frequency, spectrum, s=0)
-    fnew = np.arange(1 / duration, sampling_rate / 2 + 1 / duration, 1 / duration)
-    Snew = scipy.interpolate.splev(fnew, tck, der=0)
-    Snew = np.append(0, Snew)
-    if phase_distribution == 'uniform':
-        phases = np.random.uniform(low=0, high=2 * np.pi, size=len(Snew) - 2) * 1j
-    phase_dist = np.hstack([[0], phases, [0], np.conj(phases[:: -1])])
-    T = np.real(np.fft.ifft(np.hstack([Snew, Snew[-2: 0: -1]]) * phase_dist))
-    t = np.linspace(0, duration, len(T))
-    return t, T
-
-
-def simil_wave_reverse(waveform, time):
-    S = np.fft.fft(waveform)
-    S = (S * np.conj(S)) ** (1 / 2)
-    S = S[:int(len(S) / 2)]
-    f = np.linspace(0, 1 / (2 * np.diff(time)[0]), len(S))
-    return f, S
-
-
-def poly2fun(m, f):
-    # a1, a2, f_p = m
-    # a1 = - 10**(a1)
-    # a2 = - 10**(a2)
-    # x1 = lambda f_p: np.log10(f[f < f_p] / f_p)
-    # x2 = lambda f_p: np.log10(f[f >= f_p] / f_p)
-    # F1 = lambda f_p: a1 * x1(f_p) ** 2
-    # F2 = lambda f_p: a2 * x2(f_p) ** 2
-    # Flog = np.concatenate([F1(f_p), F2(f_p)])
-    # F = 10 ** (Flog / 10)
-
-    a2, a3, fw, f_p = m
-    fwidth = 10 ** (fw)
-    f1_b = f_p / 10 ** fwidth
-    f2_b = f_p * 10 ** fwidth
-    a2 = - 10 ** (a2)
-    a3 = - 10 ** (a3)
-
-    a1 = 2 * a2 * np.log10(f1_b / f_p)
-    a4 = 2 * a3 * np.log10(f2_b / f_p)
-    b1 = a2 * np.log10(f1_b / f_p) ** 2 - a1 * np.log10(f1_b / f_p)
-
-    b4 = a3 * np.log10(f2_b / f_p) ** 2 - a4 * np.log10(f2_b / f_p)
-
-    x1 = lambda f_p: np.log10(f[f < f1_b] / f_p)
-    x2 = lambda f_p: np.log10(f[np.all([f >= f1_b, f < f_p], axis=0)] / f_p)
-    x3 = lambda f_p: np.log10(f[np.all([f >= f_p, f < f2_b], axis=0)] / f_p)
-    x4 = lambda f_p: np.log10(f[f >= f2_b] / f_p)
-
-    F1 = lambda f_p: a1 * x1(f_p) + b1
-    F2 = lambda f_p: a2 * x2(f_p) ** 2
-    F3 = lambda f_p: a3 * x3(f_p) ** 2
-    F4 = lambda f_p: a4 * x4(f_p) + b4
-
-    Flog = np.concatenate([F1(f_p), F2(f_p), F3(f_p), F4(f_p)])
-    F = 10 ** (Flog / 10)
-
-    return F
