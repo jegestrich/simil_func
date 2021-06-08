@@ -212,7 +212,8 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     '''
     Tool for automated fitting of similarity spectra to a given spectrum using non-linear least squares fitting and root-mean-square error aas misfit function.
     INPUT:
-    st: [Obspy stream object] Stream with at least 4 traces (array elements)
+    stream: [Obspy stream object] One trace per array element
+    PSD_f: [tuple] 
     Optional:
     model: [string] defines model for calculateion, options: 'LSTFST' (defualt), 'LST', 'FST' and  'poly3d'
     freqmin: [float] lower bound of frequency range for fitting the similarity spectrum (waveform will not be filtered)
@@ -428,8 +429,9 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
 def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, baz=None, peaks='bound', bounds=None, fwidth=1, fpwidth=1/2, wwidth=10 * 60,
                     overlap=0.7, model='LSTFST', response=None, **kwargs):
     '''
-    :param st_day: Steam object of data (one trace for each array element)
-    :param FREQ_vec: min frequency of first set of overlapping frequency bands (f_max = 10**fwidth * f_min)
+    :param stream: Obspy steam object of data (one trace for each array element)
+    :param PSD_f: Tuple with PSD_f[0] = time, PSD_f[1] = frequency, PSD_f[2]= PSD; np.shape(PSD_f[2]) = (np.shape(PSD_f[1]), np.shape(PSD_f[0]))
+    :param FREQ_vec: lower frequency bounds of first set of overlapping frequency bands (f_max = 10**fwidth * f_min)
     :param FREQ_vec_prob: second set of not overlapping frequency bands
     :param baz: (optional) backazimuth for array processing
     :param peaks: ['variable','bound','constant'] 'variable': no restrictions for peak frequency;
