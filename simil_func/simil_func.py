@@ -213,7 +213,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     Tool for automated fitting of similarity spectra to a given spectrum using non-linear least squares fitting and root-mean-square error aas misfit function.
     INPUT:
     stream: [Obspy stream object] One trace per array element
-    PSD_f: [tuple] 
+    PSD_f: [tuple]
     Optional:
     model: [string] defines model for calculateion, options: 'LSTFST' (defualt), 'LST', 'FST' and  'poly3d'
     freqmin: [float] lower bound of frequency range for fitting the similarity spectrum (waveform will not be filtered)
