@@ -201,8 +201,8 @@ def myinterp(x, y, der=0, s=0):
 FREQMAX = 10
 FREQMIN = 0.3
 F8BAZ = 121
-M0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1],
-               10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1]])
+# M0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1],
+#                10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1]])
 B1 = np.array([-np.inf, -np.inf, 1e-5, 1e-5])
 B2 = np.array([np.inf, np.inf, 20, 30])
 
@@ -238,12 +238,13 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     for i in range(len(model)):
         if model[i] not in ['LSTFST', 'LST', 'FST']:
             print(model[i], ' is not a valid model')
+    if np.all([m0 == None]):
+        m0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1],
+               10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1]])
     ##### Defaults: ##############
     if peaks!='variable':
         b1, b2 = bounds
-    if np.all(m0 == None):
-        m0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1],
-                       10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1]])
+
     pref = 20e-6
     ############################
     if np.all([PSD_f==None, stream==None]):
@@ -312,118 +313,148 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
         f = f[f_keep]
         d = d[f_keep]
 
-    m = m0
+    m = m0.copy()
     ARGS = [f, d]
+    ARGS2 = ARGS.copy()
     M_func = misfit
+    a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
+    m_try = np.array([a0, m0[2]])
+
+
 
     if peaks == 'constant':
         fc = np.array([b1[-2], b1[-1]])
         m = m0[:2]
         b2 = b2[:2]
         b1 = b1[:2]
-        ARGS = [f, d, fc]
+        ARGS2 = [f, d, fc]
         M_func = misfit_peak
-        for i in range(len(model)):
-            if model[i] == 'poly3d':
-                z = np.polyfit(np.log10(f.squeeze()), d.squeeze(), 3)
-                sol_temp = np.asarray(np.poly1d(z))
-                norm_temp = np.asarray(
-                    [np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
-                            1 / 2)])
-                # print(norm_temp)
-            elif model[i] == 'LST':
-                ARGS = [f, d, fc[0]]
-                a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-                m_try = np.array([a0])
-                sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, method='trf',
-                                                         kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = np.zeros(4)
-                sol_temp[0] = sol_temp0.x
-                sol_temp[2] = fc[0]
+        ARGS = [f, d, fc[0]]
+        m_try = np.array([a0])
+
+
+
+    for i in range(len(model)):
+        if model[i] == 'poly3d':
+            z = np.polyfit( np.log10(f.squeeze()), d.squeeze(), 3)
+            sol_temp = np.asarray(np.poly1d(z))
+            norm_temp = np.asarray(
+                [np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
+                        1 / 2)])
+
+        else:
+            if model[i] == 'LSTFST':
+                m_try = m0.copy()
+
+            if np.all([peaks == 'bound', model[i] == 'LST']):
+                bound_try = (b1[[0, 2]], b2[[0, 2]])
+            elif np.all([peaks == 'bound', model[i] == 'FST']):
+                bound_try = (b1[[1, 3]], b2[[1, 3]])
+            elif np.all([peaks == 'bound', model[i] == 'LSTFST']):
+                bound_try = (b1, b2)
+            elif np.any([model[i] == 'LST', model[i] == 'FST']):
+                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+            elif model[i] == 'LSTFST':
+                bound_try = (np.array([-np.inf, -np.inf, -np.inf, -np.inf]), np.array([np.inf, np.inf, np.inf, np.inf]))
+
+            out_ind = np.where(np.any([m_try < bound_try[0], m_try > bound_try[1]], axis=0))[0]
+            m_try[out_ind] = (bound_try[0][out_ind]+bound_try[1][out_ind]) / 2
+
+            ### finally the fitting ###
+            sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
+                                                     kwargs={'model': model[i]})
+            ###########################
+            norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+            sol_temp = np.zeros(4)
+
+            if model[i] == 'LST':
+                sol_temp[0] = sol_temp0.x[0]
+                if peaks == 'constant':
+                    sol_temp[2] = fc[0]
+                else:
+                    sol_temp[2] = sol_temp0.x[1]
 
             elif model[i] == 'FST':
-                ARGS = [f, d, fc[1]]
-                b0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-                m_try = np.array([b0])
-                sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, method='trf',
-                                                         kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = np.zeros(4)
-                sol_temp[1] = sol_temp0.x
-                sol_temp[3] = fc[1]
+                sol_temp[1] = sol_temp0.x[0]
+                if peaks == 'constant':
+                    sol_temp[3] = fc[1]
+                else:
+                    sol_temp[3] = sol_temp0.x[1]
 
             else:
-                ARGS = [f, d,fc]
-                sol_temp0 = scipy.optimize.least_squares(M_func, m, args=ARGS, method='trf',
-                                                         kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = np.zeros(4)
-                sol_temp[[0,1]] = sol_temp0.x
-                sol_temp[[2,3]] = fc
-            if i == 0:
-                sol_all = np.array([sol_temp])
-                norm_all = np.array([norm_temp])
-            else:
-                sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
-                norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
-        if stream == None:
-            return sol_all, norm_all.squeeze()
+                sol_temp[[0,1]] = sol_temp0.x[[0,1]]
+                if peaks == 'constant':
+                    sol_temp[[2,3]] = fc
+                else:
+                    sol_temp[[2,3]] = sol_temp0.x[[2,3]]
+
+        if i == 0:
+            sol_all = np.array([sol_temp])
+            norm_all = np.array([norm_temp])
         else:
-            return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
+            sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
+            norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
+    if stream == None:
+        return sol_all, norm_all.squeeze()
     else:
-        for i in range(len(model)):
-            if model[i] == 'poly3d':
-                z = np.polyfit(np.log10(f.squeeze()), d.squeeze(), 3)
-                sol_temp = np.asarray(np.poly1d(z))
-                norm_temp = np.asarray([np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
-                                 1 / 2)])
-            elif model[i] == 'LST':
+        return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
 
-                a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-                m_try = np.array([a0, m0[2]])
-                if peaks == 'variable':
-                    bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-                else:
-                    bound_try = (b1[[0,2]], b2[[0, 2]])
-                sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-                                                    kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = np.zeros(4)
-                sol_temp[[0,2]] = sol_temp0.x
-
-            elif model[i] == 'FST':
-                b0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-                m_try = np.array([b0, m0[3]])
-                if peaks == 'variable':
-                    bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-                else:
-                    bound_try = (b1[[1, 3]], b2[[1, 3]])
-                sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-                                                         kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = np.zeros(4)
-                sol_temp[[1, 3]] = sol_temp0.x
-
-            else:
-                if peaks == 'variable':
-                    bound_try = (np.array([-np.inf, -np.inf,-np.inf, -np.inf]), np.array([np.inf, np.inf,np.inf, np.inf]))
-                else:
-                    bound_try = (b1, b2)
-                sol_temp0 = scipy.optimize.least_squares(M_func, m, args=ARGS, bounds=bound_try, method='trf',
-                                                    kwargs={'model': model[i]})
-                norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-                sol_temp = sol_temp0.x
-            if i == 0:
-                sol_all = np.array([sol_temp])
-                norm_all = np.array([norm_temp])
-            else:
-                sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
-                norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
-        if stream == None:
-            return sol_all, norm_all.squeeze()
-        else:
-            return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()  # , sol_all_trf, sol_LST_trf, sol_FST_trf, ARGS, m, b1, b2
+    #
+    #
+    #
+    # else:
+    #     for i in range(len(model)):
+    #         if model[i] == 'poly3d':
+    #             z = np.polyfit(np.log10(f.squeeze()), d.squeeze(), 3)
+    #             sol_temp = np.asarray(np.poly1d(z))
+    #             norm_temp = np.asarray([np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
+    #                              1 / 2)])
+    #         elif model[i] == 'LST':
+    #
+    #             a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
+    #             m_try = np.array([a0, m0[2]])
+    #             if peaks == 'variable':
+    #                 bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+    #             else:
+    #                 bound_try = (b1[[0,2]], b2[[0, 2]])
+    #             sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
+    #                                                 kwargs={'model': model[i]})
+    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+    #             sol_temp = np.zeros(4)
+    #             sol_temp[[0,2]] = sol_temp0.x
+    #
+    #         elif model[i] == 'FST':
+    #             b0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
+    #             m_try = np.array([b0, m0[3]])
+    #             if peaks == 'variable':
+    #                 bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+    #             else:
+    #                 bound_try = (b1[[1, 3]], b2[[1, 3]])
+    #             sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
+    #                                                      kwargs={'model': model[i]})
+    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+    #             sol_temp = np.zeros(4)
+    #             sol_temp[[1, 3]] = sol_temp0.x
+    #
+    #         else:
+    #             if peaks == 'variable':
+    #                 bound_try = (np.array([-np.inf, -np.inf,-np.inf, -np.inf]), np.array([np.inf, np.inf,np.inf, np.inf]))
+    #             else:
+    #                 bound_try = (b1, b2)
+    #             sol_temp0 = scipy.optimize.least_squares(M_func, m, args=ARGS, bounds=bound_try, method='trf',
+    #                                                 kwargs={'model': model[i]})
+    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+    #             sol_temp = sol_temp0.x
+    #         if i == 0:
+    #             sol_all = np.array([sol_temp])
+    #             norm_all = np.array([norm_temp])
+    #         else:
+    #             sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
+    #             norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
+    #     if stream == None:
+    #         return sol_all, norm_all.squeeze()
+    #     else:
+    #         return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()  # , sol_all_trf, sol_LST_trf, sol_FST_trf, ARGS, m, b1, b2
 
 
 def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, baz=None, peaks='bound', bounds=None, fwidth=1, fpwidth=1/2, wwidth=10 * 60,
