@@ -207,7 +207,7 @@ B2 = np.array([100, 100])
 
 
 def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, m0=None, PSD_win='1min',
-              peaks='variable', bounds=(B1, B2), reject_band=None, response=None):
+              peaks='variable', bounds=(B1, B2), response=None):
     '''
     Tool for automated fitting of similarity spectra to a given spectrum using non-linear least squares fitting and root-mean-square error aas misfit function.
     INPUT:
@@ -240,22 +240,117 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     if np.all([m0 == None]):
         m0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1],
                10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1]])
-    ##### Defaults: ##############
+    ##### define bounds: ##############
     if np.any([bounds == None]):
         bounds = (B1,B2)
-
     if len(bounds[0]) == 2:
-        # b1, b2 = bounds
         b1 = np.append(np.array([-np.inf, -np.inf]), bounds[0])
         b2 = np.append(np.array([np.inf, np.inf]), bounds[1])
-
     elif len(bounds[0]) == 1:
         b1 = np.append(np.array([-np.inf, -np.inf]), np.array([bounds[0].squeeze(),bounds[0].squeeze()]))
         b2 = np.append(np.array([np.inf, np.inf]), np.array([bounds[1].squeeze(),bounds[1].squeeze()]))
-            # b1, b2 = bounds
+    ##### calculate PSD: ##############
+    if stream == None:
+        if np.any(response):
+            f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=response)
+        else:
+            f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
+    else:
+        f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
+
+    ##### Define starting conditions #####
+    m = m0.copy()
+    ARGS = [f, d]
+    ARGS2 = ARGS.copy()
+    M_func = misfit
+    a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
+    if peaks == 'constant':
+        fc = np.array([b1[-2], b1[-1]])
+        m = m0[:2]
+        b2 = b2[:2]
+        b1 = b1[:2]
+        ARGS2 = [f, d, fc]
+        M_func = misfit_peak
+        ARGS = [f, d, fc[0]]
+        m_try = np.array([a0])
+
+    ##### Calculate fit for each model #####
+    for i in range(len(model)):
+        ### define starting model paramters and bounds ###
+        if model[i] == 'LST':
+            m_try = np.array([a0, m0[2]])
+            if peaks == 'bound':
+                bound_try = (b1[[0, 2]], b2[[0, 2]])
+            elif peaks == 'constant':
+                bound_try = (b1[0], b2[0])
+            elif peaks == 'variable':
+                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+        elif model[i] == 'FST':
+            m_try = np.array([a0, m0[3]])
+            if peaks == 'bound':
+                bound_try = (b1[[1, 3]], b2[[1, 3]])
+            elif peaks == 'constant':
+                bound_try = (b1[1], b2[1])
+            elif peaks == 'variable':
+                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+        elif model[i] == 'LSTFST':
+            m_try = m0.copy()
+            if peaks == 'bound':
+                bound_try = (b1, b2)
+            elif peaks == 'constant':
+                bound_try = (b1[:2], b2[:2])
+            elif peaks == 'variable':
+                bound_try = (np.array([-np.inf, -np.inf, -np.inf, -np.inf]), np.array([np.inf, np.inf, np.inf, np.inf]))
+        ### make sure that starting model parameters are feasible
+        out_ind = np.where(np.any([m_try < bound_try[0], m_try > bound_try[1]], axis=0))[0]
+        if len(out_ind) > 0:
+            m_try[out_ind] = (bound_try[0][out_ind]+bound_try[1][out_ind]) / 2
+
+
+        ### finally the fitting ###
+        sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
+                                                 kwargs={'model': model[i]})
+        ###########################
+        norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+        sol_temp = np.zeros(4)
+
+        if model[i] == 'LST':
+            sol_temp[0] = sol_temp0.x[0]
+            if peaks == 'constant':
+                sol_temp[2] = fc[0]
+            else:
+                sol_temp[2] = sol_temp0.x[1]
+        elif model[i] == 'FST':
+            sol_temp[1] = sol_temp0.x[0]
+            if peaks == 'constant':
+                sol_temp[3] = fc[1]
+            else:
+                sol_temp[3] = sol_temp0.x[1]
+        else:
+            sol_temp[[0,1]] = sol_temp0.x[[0,1]]
+            if peaks == 'constant':
+                sol_temp[[2,3]] = fc
+            else:
+                sol_temp[[2,3]] = sol_temp0.x[[2,3]]
+        if i == 0:
+            sol_all = np.array([sol_temp])
+            norm_all = np.array([norm_temp])
+        else:
+            sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
+            norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
+
+    if stream == None:
+        return sol_all, norm_all.squeeze()
+    else:
+        return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
+
+def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None):
+    from array_processing.tools import beamForm
+    from array_processing.algorithms.helpers import getrij
+    import pandas as pd
 
     pref = 20e-6
-    ############################
+
     if np.all([PSD_f==None, stream==None]):
         print('Give either steam or PSD')
     elif PSD_f==None: #calculate PSD
@@ -317,160 +412,10 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     f = fpsd[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)]
     d = np.reshape(PSD[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)], (len(f), 1))
 
-    if np.any([reject_band is not None]):
-        f_keep = np.any([f < reject_band[0], f > reject_band[1]], axis=0)
-        f = f[f_keep]
-        d = d[f_keep]
-
-    m = m0.copy()
-    ARGS = [f, d]
-    ARGS2 = ARGS.copy()
-    M_func = misfit
-    a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-
-
-
-
-    if peaks == 'constant':
-        fc = np.array([b1[-2], b1[-1]])
-        m = m0[:2]
-        b2 = b2[:2]
-        b1 = b1[:2]
-        ARGS2 = [f, d, fc]
-        M_func = misfit_peak
-        ARGS = [f, d, fc[0]]
-        m_try = np.array([a0])
-
-
-
-    for i in range(len(model)):
-
-        if model[i] == 'LST':
-            m_try = np.array([a0, m0[2]])
-            if peaks == 'bound':
-                bound_try = (b1[[0, 2]], b2[[0, 2]])
-            elif peaks == 'constant':
-                bound_try = (b1[0], b2[0])
-            elif peaks == 'variable':
-                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-        elif model[i] == 'FST':
-            m_try = np.array([a0, m0[3]])
-            if peaks == 'bound':
-                bound_try = (b1[[1, 3]], b2[[1, 3]])
-            elif peaks == 'constant':
-                bound_try = (b1[1], b2[1])
-            elif peaks == 'variable':
-                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-        elif model[i] == 'LSTFST':
-            m_try = m0.copy()
-            if peaks == 'bound':
-                bound_try = (b1, b2)
-            elif peaks == 'constant':
-                bound_try = (b1[:2], b2[:2])
-            elif peaks == 'variable':
-                bound_try = (np.array([-np.inf, -np.inf, -np.inf, -np.inf]), np.array([np.inf, np.inf, np.inf, np.inf]))
-
-        out_ind = np.where(np.any([m_try < bound_try[0], m_try > bound_try[1]], axis=0))[0]
-        if len(out_ind) > 0:
-            m_try[out_ind] = (bound_try[0][out_ind]+bound_try[1][out_ind]) / 2
-
-
-        ### finally the fitting ###
-        sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-                                                 kwargs={'model': model[i]})
-        ###########################
-        norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-        sol_temp = np.zeros(4)
-
-        if model[i] == 'LST':
-            sol_temp[0] = sol_temp0.x[0]
-            if peaks == 'constant':
-                sol_temp[2] = fc[0]
-            else:
-                sol_temp[2] = sol_temp0.x[1]
-
-        elif model[i] == 'FST':
-            sol_temp[1] = sol_temp0.x[0]
-            if peaks == 'constant':
-                sol_temp[3] = fc[1]
-            else:
-                sol_temp[3] = sol_temp0.x[1]
-
-        else:
-            sol_temp[[0,1]] = sol_temp0.x[[0,1]]
-            if peaks == 'constant':
-                sol_temp[[2,3]] = fc
-            else:
-                sol_temp[[2,3]] = sol_temp0.x[[2,3]]
-
-        if i == 0:
-            sol_all = np.array([sol_temp])
-            norm_all = np.array([norm_temp])
-        else:
-            sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
-            norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
     if stream == None:
-        return sol_all, norm_all.squeeze()
+        return f, d
     else:
-        return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
-
-    #
-    #
-    #
-    # else:
-    #     for i in range(len(model)):
-    #         if model[i] == 'poly3d':
-    #             z = np.polyfit(np.log10(f.squeeze()), d.squeeze(), 3)
-    #             sol_temp = np.asarray(np.poly1d(z))
-    #             norm_temp = np.asarray([np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
-    #                              1 / 2)])
-    #         elif model[i] == 'LST':
-    #
-    #             a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-    #             m_try = np.array([a0, m0[2]])
-    #             if peaks == 'variable':
-    #                 bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-    #             else:
-    #                 bound_try = (b1[[0,2]], b2[[0, 2]])
-    #             sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-    #                                                 kwargs={'model': model[i]})
-    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-    #             sol_temp = np.zeros(4)
-    #             sol_temp[[0,2]] = sol_temp0.x
-    #
-    #         elif model[i] == 'FST':
-    #             b0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-    #             m_try = np.array([b0, m0[3]])
-    #             if peaks == 'variable':
-    #                 bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-    #             else:
-    #                 bound_try = (b1[[1, 3]], b2[[1, 3]])
-    #             sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-    #                                                      kwargs={'model': model[i]})
-    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-    #             sol_temp = np.zeros(4)
-    #             sol_temp[[1, 3]] = sol_temp0.x
-    #
-    #         else:
-    #             if peaks == 'variable':
-    #                 bound_try = (np.array([-np.inf, -np.inf,-np.inf, -np.inf]), np.array([np.inf, np.inf,np.inf, np.inf]))
-    #             else:
-    #                 bound_try = (b1, b2)
-    #             sol_temp0 = scipy.optimize.least_squares(M_func, m, args=ARGS, bounds=bound_try, method='trf',
-    #                                                 kwargs={'model': model[i]})
-    #             norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-    #             sol_temp = sol_temp0.x
-    #         if i == 0:
-    #             sol_all = np.array([sol_temp])
-    #             norm_all = np.array([norm_temp])
-    #         else:
-    #             sol_all = np.concatenate((sol_all, np.array([sol_temp])), axis=0)
-    #             norm_all = np.concatenate((norm_all, np.array([norm_temp])), axis=0)
-    #     if stream == None:
-    #         return sol_all, norm_all.squeeze()
-    #     else:
-    #         return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()  # , sol_all_trf, sol_LST_trf, sol_FST_trf, ARGS, m, b1, b2
-
+        return f, d, fpsd, tvec, PSD, beam
 
 def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, baz=None, peaks='bound', bounds=None, fwidth=1, fpwidth=1/2, wwidth=10 * 60,
                     overlap=0.7, model='LSTFST', response=None, **kwargs):
