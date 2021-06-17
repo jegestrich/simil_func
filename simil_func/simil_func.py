@@ -80,12 +80,12 @@ def simil_func(m, f, p=20e-6, output='dB', model='LSTFST', **kwargs):
     Supersonic Jets" equation (2)
     INPUT:
     m: [array shape (4,1)] model vector with m[0]=ln(A*C**(-2)), m[1]=ln(B*C**(-2))), m[2]=fL, m[3]=fF with C=ln(r/Dj)
-        (for LST and FST), or x**3*m[0] + x**2*m[1] + x*m[2] + m[3] for poly3d
+        (for LST and FST)
     f: [array like] frequency
     p: [float] reference pressure, default: p=20e-6 Pa
     output: [string] 'dB' spectrum in dB scale (as in eq. (2)), 'orig' spectrum (as in eq. (1)), default: 'dB'
     model: [string] specifies the model used: 'LSTFST' (default, calculates combined LST&FST spectrum), 'LST', 'FST'
-        or 'poly3d' (calculates spectrum for 3rd order polynomial)
+        (calculates spectrum for 3rd order polynomial)
     OUTPUT:
     SdB (if output='dB') [array like, equal length to f] spectrum
     S (if output='orig') [array like, equal length to f] spectrum
@@ -115,7 +115,6 @@ def simil_func(m, f, p=20e-6, output='dB', model='LSTFST', **kwargs):
             fL = m[1]
         else:
             print('model vector must have length of 2 or 4')
-        # print(m)
         F = GF(f, fL=fL, output='F')
         if output == 'dB':
             SdB = 10 * np.log10(np.exp(a) * F) - 20 * np.log10(p)
@@ -147,10 +146,10 @@ def misfit(m, f, d, model='LSTFST', **kwargs):
     Function to calculate misfit (std) between data and synthetic similarity spectrum
     INPUT:
     m: [array shape (4,1)] model vector with m[0]=ln(A*C**(-2)), m[1]=ln(B*C**(-2))), m[2]=fL, m[3]=fF with C=ln(r/Dj)
-        (for LST and FST), or x**3*m[0] + x**2*m[1] + x*m[2] + m[3] for poly3d
+        (for LST and FST)
     f: [array like] frequency
     d: [array like, same shape as f] data vector
-    model: [string] 'LSTFST' (default), 'LST', 'FST or 'poly3d'
+    model: [string] 'LSTFST' (default), 'LST', 'FST'
     **kwargs: keyword arguments for simil_func
     OUTPUT:
     M: [array like, equal length to f and d] std between data and similarity spectrum
@@ -203,8 +202,8 @@ FREQMIN = 0.3
 F8BAZ = 121
 # M0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1],
 #                10 ** (np.linspace(np.log10(FREQMIN), np.log10(FREQMAX), 3))[1]])
-B1 = np.array([-np.inf, -np.inf, 1e-5, 1e-5])
-B2 = np.array([np.inf, np.inf, 20, 30])
+B1 = np.array([1e-5, 1e-5])
+B2 = np.array([100, 100])
 
 
 def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=FREQMAX, baz=F8BAZ, m0=None, PSD_win='1min',
@@ -215,7 +214,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     stream: [Obspy stream object] One trace per array element
     PSD_f: [tuple]
     Optional:
-    model: [string] defines model for calculateion, options: 'LSTFST' (defualt), 'LST', 'FST' and  'poly3d'
+    model: [string] defines model for calculateion, options: 'LSTFST' (defualt), 'LST', 'FST'
     freqmin: [float] lower bound of frequency range for fitting the similarity spectrum (waveform will not be filtered)
         , default: FREQMIN (defined above)
     freqmax: [float] upper bound of frequency range for fitting the similarity spectrum (waveform will not be filtered)
@@ -242,8 +241,18 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
         m0 = np.array([np.log(400), np.log(300), 10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1],
                10 ** (np.linspace(np.log10(freqmin), np.log10(freqmax), 3))[1]])
     ##### Defaults: ##############
-    if peaks!='variable':
-        b1, b2 = bounds
+    if np.any([bounds == None]):
+        bounds = (B1,B2)
+
+    if len(bounds[0]) == 2:
+        # b1, b2 = bounds
+        b1 = np.append(np.array([-np.inf, -np.inf]), bounds[0])
+        b2 = np.append(np.array([np.inf, np.inf]), bounds[1])
+
+    elif len(bounds[0]) == 1:
+        b1 = np.append(np.array([-np.inf, -np.inf]), np.array([bounds[0].squeeze(),bounds[0].squeeze()]))
+        b2 = np.append(np.array([np.inf, np.inf]), np.array([bounds[1].squeeze(),bounds[1].squeeze()]))
+            # b1, b2 = bounds
 
     pref = 20e-6
     ############################
@@ -318,7 +327,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     ARGS2 = ARGS.copy()
     M_func = misfit
     a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
-    m_try = np.array([a0, m0[2]])
+
 
 
 
@@ -335,58 +344,64 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
 
 
     for i in range(len(model)):
-        if model[i] == 'poly3d':
-            z = np.polyfit( np.log10(f.squeeze()), d.squeeze(), 3)
-            sol_temp = np.asarray(np.poly1d(z))
-            norm_temp = np.asarray(
-                [np.dot(misfit(sol_temp, f, d, model='poly3d'), misfit(sol_temp, f, d, model='poly3d')) ** (
-                        1 / 2)])
 
-        else:
-            if model[i] == 'LSTFST':
-                m_try = m0.copy()
-
-            if np.all([peaks == 'bound', model[i] == 'LST']):
+        if model[i] == 'LST':
+            m_try = np.array([a0, m0[2]])
+            if peaks == 'bound':
                 bound_try = (b1[[0, 2]], b2[[0, 2]])
-            elif np.all([peaks == 'bound', model[i] == 'FST']):
-                bound_try = (b1[[1, 3]], b2[[1, 3]])
-            elif np.all([peaks == 'bound', model[i] == 'LSTFST']):
-                bound_try = (b1, b2)
-            elif np.any([model[i] == 'LST', model[i] == 'FST']):
+            elif peaks == 'constant':
+                bound_try = (b1[0], b2[0])
+            elif peaks == 'variable':
                 bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
-            elif model[i] == 'LSTFST':
+        elif model[i] == 'FST':
+            m_try = np.array([a0, m0[3]])
+            if peaks == 'bound':
+                bound_try = (b1[[1, 3]], b2[[1, 3]])
+            elif peaks == 'constant':
+                bound_try = (b1[1], b2[1])
+            elif peaks == 'variable':
+                bound_try = (np.array([-np.inf, -np.inf]), np.array([np.inf, np.inf]))
+        elif model[i] == 'LSTFST':
+            m_try = m0.copy()
+            if peaks == 'bound':
+                bound_try = (b1, b2)
+            elif peaks == 'constant':
+                bound_try = (b1[:2], b2[:2])
+            elif peaks == 'variable':
                 bound_try = (np.array([-np.inf, -np.inf, -np.inf, -np.inf]), np.array([np.inf, np.inf, np.inf, np.inf]))
 
-            out_ind = np.where(np.any([m_try < bound_try[0], m_try > bound_try[1]], axis=0))[0]
+        out_ind = np.where(np.any([m_try < bound_try[0], m_try > bound_try[1]], axis=0))[0]
+        if len(out_ind) > 0:
             m_try[out_ind] = (bound_try[0][out_ind]+bound_try[1][out_ind]) / 2
 
-            ### finally the fitting ###
-            sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
-                                                     kwargs={'model': model[i]})
-            ###########################
-            norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
-            sol_temp = np.zeros(4)
 
-            if model[i] == 'LST':
-                sol_temp[0] = sol_temp0.x[0]
-                if peaks == 'constant':
-                    sol_temp[2] = fc[0]
-                else:
-                    sol_temp[2] = sol_temp0.x[1]
+        ### finally the fitting ###
+        sol_temp0 = scipy.optimize.least_squares(M_func, m_try, args=ARGS, bounds=bound_try, method='trf',
+                                                 kwargs={'model': model[i]})
+        ###########################
+        norm_temp = np.array([np.dot(sol_temp0.fun, sol_temp0.fun)]) ** (1 / 2)
+        sol_temp = np.zeros(4)
 
-            elif model[i] == 'FST':
-                sol_temp[1] = sol_temp0.x[0]
-                if peaks == 'constant':
-                    sol_temp[3] = fc[1]
-                else:
-                    sol_temp[3] = sol_temp0.x[1]
-
+        if model[i] == 'LST':
+            sol_temp[0] = sol_temp0.x[0]
+            if peaks == 'constant':
+                sol_temp[2] = fc[0]
             else:
-                sol_temp[[0,1]] = sol_temp0.x[[0,1]]
-                if peaks == 'constant':
-                    sol_temp[[2,3]] = fc
-                else:
-                    sol_temp[[2,3]] = sol_temp0.x[[2,3]]
+                sol_temp[2] = sol_temp0.x[1]
+
+        elif model[i] == 'FST':
+            sol_temp[1] = sol_temp0.x[0]
+            if peaks == 'constant':
+                sol_temp[3] = fc[1]
+            else:
+                sol_temp[3] = sol_temp0.x[1]
+
+        else:
+            sol_temp[[0,1]] = sol_temp0.x[[0,1]]
+            if peaks == 'constant':
+                sol_temp[[2,3]] = fc
+            else:
+                sol_temp[[2,3]] = sol_temp0.x[[2,3]]
 
         if i == 0:
             sol_all = np.array([sol_temp])
@@ -519,31 +534,25 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                 PEAKS = 'constant'
                 f_p = freqmin * 10 ** (fwidth / 2)
                 if np.any([bounds==None], axis=0):
-                    b1 = np.array([-np.inf, -np.inf, f_p, f_p])
-                    b2 = np.array([np.inf, np.inf, f_p, f_p])
+                    b1 = np.array([f_p, f_p])
+                    b2 = np.array([f_p, f_p])
                 else:
                     b1 = bounds[0]
                     b2 = bounds[1]
-                m0 = np.array([0, 0, f_p, f_p])
-                BOUNDS = (b1, b2)
+                m0 = np.array([f_p, f_p])
+                BOUNDS = None
             elif peaks == 'bound':
                 PEAKS = 'bound'
                 f_p = freqmin * 10 ** (fwidth / 2)
                 f_p_min = f_p / 10 ** (fpwidth / 2)
                 f_p_max = f_p * 10 ** (fpwidth / 2)
                 if np.any([bounds==None], axis=0):
-                    b1 = np.array([-np.inf,  -np.inf, f_p_min, f_p_min])
-                    b2 = np.array([ np.inf, np.inf, f_p_max, f_p_max])
+                    b1 = np.array([f_p_min, f_p_min])
+                    b2 = np.array([f_p_max, f_p_max])
                 else:
                     b1 = bounds[0]
                     b2 = bounds[1]
                 m0 = np.array([0, 0, f_p, f_p])
-                if f_p < b1[3]:
-                    m0[2] = b1[2]
-                    m0[3] = b1[3]
-                if f_p > b2[3]:
-                    m0[2] = b2[2]
-                    m0[3] = b2[3]
                 BOUNDS = (b1, b2)
             if np.all(PSD_f == None):
                 st = stream.copy()

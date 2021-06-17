@@ -85,8 +85,8 @@ nf1 = 20
 FREQ_vec = 10**(np.linspace(np.log10(0.0166),np.log10(25/10),nf1))#np.logspace(-2,2,7)np.log10(st_day[0].stats.sampling_rate / 2)
 nf = 40
 FREQ_vec_prob = 10 ** (np.linspace(np.log10(0.0166), np.log10(25), nf))
-b1 = np.array([-np.inf, -np.inf, 0.15, 0.15])
-b2 = np.array([np.inf, np.inf, FREQMAX, FREQMAX])
+b1 = np.array([0.15, 0.15])
+b2 = np.array([FREQMAX, FREQMAX])
 beam_all, tvec_all, P_mat, fpsd, norm_trf, tmid, M, sol_trf = sf.misfit_spectrum(stream=st_day, FREQ_vec=FREQ_vec, FREQ_vec_prob=FREQ_vec_prob, baz=121, peaks='bound', bounds=(b1,b2), fwidth=1, model=['LSTFST', 'LST', 'FST'])
 
 #%% calculate misfit difference spectrum
