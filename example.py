@@ -9,28 +9,49 @@ from matplotlib import dates
 import matplotlib.pyplot as plt
 from obspy.clients.fdsn import Client
 
-#%% reading in data from IRIS and applying sensitivity value
+#%% reading in data from IRIS 
+
+NETWORK = '5L'
+STATION = 'FIS8'
+LOCATION = '*'
+CHANNEL = '*'
 
 STARTTIME = obs.UTCDateTime('2018-6-16T17:00')
 ENDTIME   = STARTTIME + 1 * 60 *60
 
-fdsn_client = Client(
-    'IRIS')  # Fetch waveform from IRIS FDSN web service into a ObsPy stream object# and automatically attach correct response
-st_day = fdsn_client.get_waveforms(network='5L', station='FIS8', location='*',channel='*', starttime=STARTTIME, endtime=ENDTIME,attach_response=True)# define a filter band to prevent amplifying noise during the deconvolution
+fdsn_client = Client('IRIS')  # Fetch waveform from IRIS FDSN web service into a ObsPy stream object# and automatically attach correct response
+st_day = fdsn_client.get_waveforms(network=NETWORK, station=STATION, 
+                                   location='*',channel='*', 
+                                   starttime=STARTTIME, endtime=ENDTIME,
+                                   attach_response=True)
+
+#%% resample and remove response
+
+#resample to 100 Hz to save time
+st_day.interpolate(sampling_rate=100, method="lanczos", a=15)
+
+# print('Removing response...') 
+# Fs =st_day[0].stats.sampling_rate
+# pre_filt = [0.001, 0.005, Fs/2-2, Fs/2] #pre-filt for response removal
+# st_day.remove_response(pre_filt=pre_filt, output='VEL', water_level=None) 
 
 SENSITIVITY = 8210.1
 for tr in st_day:
     tr.data = tr.data / SENSITIVITY
 
 #%% Attaching array coordinates
-local_coords = dict({
-     '01': [19.4638, -154.91287, 254.0],
-     '02': [19.4638, -154.91315, 251.0],
-     '03': [19.46406, -154.91307, 255.0],
-     '04': [19.46388, -154.91308, 259.0]})
+inv = fdsn_client.get_stations(network='5L', station='FIS8',
+                                  location='*', channel='*',
+                                  starttime=STARTTIME,
+                                  endtime=ENDTIME,
+                                  level='channel')
+
 for tr in st_day:
-    tr.stats.latitude, tr.stats.longitude, \
-    tr.stats.elevation = local_coords[tr.stats.location]
+    coords = inv.get_coordinates(tr.id)
+    tr.stats.longitude = coords['longitude']
+    tr.stats.latitude = coords['latitude']
+    tr.stats.elevation = coords['elevation']
+
 #%% Fitting the similarity spectra to data
 FREQMIN = 0.05
 FREQMAX = 10
