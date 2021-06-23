@@ -2,7 +2,7 @@
 import numpy as np
 import obspy as obs
 import simil_func as sf
-from waveform_collection import read_local
+from waveform_collection import gather_waveforms
 from array_processing.tools import beamForm
 from array_processing.algorithms.helpers import getrij
 from matplotlib import dates
@@ -19,38 +19,12 @@ CHANNEL = '*'
 STARTTIME = obs.UTCDateTime('2018-6-16T17:00')
 ENDTIME   = STARTTIME + 1 * 60 *60
 
-fdsn_client = Client('IRIS')  # Fetch waveform from IRIS FDSN web service into a ObsPy stream object# and automatically attach correct response
-st_day = fdsn_client.get_waveforms(network=NETWORK, station=STATION, 
-                                   location='*',channel='*', 
-                                   starttime=STARTTIME, endtime=ENDTIME,
-                                   attach_response=True)
+st_day = gather_waveforms(source='IRIS', network=NETWORK, station=STATION,
+                      location=LOCATION, channel=CHANNEL, starttime=STARTTIME,
+                      endtime=ENDTIME, remove_response=True)
 
-#%% resample and remove response
-
-#resample to 100 Hz to save time
+#%%resample to 100 Hz to save time
 st_day.interpolate(sampling_rate=100, method="lanczos", a=15)
-
-# print('Removing response...') 
-# Fs =st_day[0].stats.sampling_rate
-# pre_filt = [0.001, 0.005, Fs/2-2, Fs/2] #pre-filt for response removal
-# st_day.remove_response(pre_filt=pre_filt, output='VEL', water_level=None) 
-
-SENSITIVITY = 8210.1
-for tr in st_day:
-    tr.data = tr.data / SENSITIVITY
-
-#%% Attaching array coordinates
-inv = fdsn_client.get_stations(network='5L', station='FIS8',
-                                  location='*', channel='*',
-                                  starttime=STARTTIME,
-                                  endtime=ENDTIME,
-                                  level='channel')
-
-for tr in st_day:
-    coords = inv.get_coordinates(tr.id)
-    tr.stats.longitude = coords['longitude']
-    tr.stats.latitude = coords['latitude']
-    tr.stats.elevation = coords['elevation']
 
 #%% Fitting the similarity spectra to data
 FREQMIN = 0.05
@@ -103,7 +77,7 @@ while tend <= ENDTIME:
 print('Calculations are done.')
 #%% Calculate misfit spectrum
 nf1 = 20
-FREQ_vec = 10**(np.linspace(np.log10(0.0166),np.log10(25/10),nf1))#np.logspace(-2,2,7)np.log10(st_day[0].stats.sampling_rate / 2)
+FREQ_vec = 10**(np.linspace(np.log10(0.0166),np.log10(25/10),nf1))
 nf = 40
 FREQ_vec_prob = 10 ** (np.linspace(np.log10(0.0166), np.log10(25), nf))
 b1 = np.array([0.15, 0.15])
@@ -113,7 +87,7 @@ beam_all, tvec_all, P_mat, fpsd, norm_trf, tmid, M, sol_trf = sf.misfit_spectrum
 #%% calculate misfit difference spectrum
 threshold = 2
 M_diff = sf.misfit_diff(M[1:3,:,:], threshold)
-M_all = np.concatenate((M,np.array([M_diff])),axis=0)#[M[0,:,:],M_LST,M_FST,M_diff
+M_all = np.concatenate((M,np.array([M_diff])),axis=0)
 
 
 #%% plot similarity misfit etc.
