@@ -1,7 +1,7 @@
 simil_func
 ============
 
-Tool for automated fitting of the large-scale-turbulence (LST) and fine-scale-turbulence (FST) spectra based on Tam et al., 1996 to volcanic eruption infrasound.
+Tool for automated fitting of the large-scale-turbulence (LST) and fine-scale-turbulence (FST) spectra (Tam et al., 1996) to volcanic eruption infrasound introduced in Gestrich et al., (in prep.) and based on previous work by Matoza et al., 2009.
 
 Included functions in `simil_func.py`:
 
@@ -15,7 +15,10 @@ Included functions in `simil_func.py`:
 * `misfit_spectrum()`: Function to calculate a misfit spectrogram. It uses the fitting tool `simil_fit()` for overlapping frequency bands and averages the misfit for a frequency array.
 
 **References**
+*Gestrich, J. E., Fee, D., Matoza, R. S., Lyons, J. J., Ruiz, M. C. (in prep.). Fitting Jet Noise Similarity Spectra to Volcano Infrasound Data. Earth and Space Science*
+*Matoza, R. S., Fee, D., Garcés, M. A., Seiner, J. M., Ramón, P. A., & Hedlin, M. A. H. (2009). Infrasonic jet noise from volcanic eruptions. Geophysical Research Letters.*
 *Tam, C. K. W., Golebiowski, M., & Seiner, J. M. (1996). On the Two Components of Turbulent Mixing Noise from Supersonic Jets. American Institute of Aeronautics and Astronautics.*
+
 
 <!---*If this package accompanies your paper or uses specific results from a paper,
 reference it here...*-->
