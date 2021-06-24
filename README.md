@@ -14,7 +14,7 @@ Included functions in `simil_func.py`:
 * `simil_fit()`: Tool for automated fitting of similarity spectra (LST & FST) to a given spectrum using non-linear least squares fitting and root-mean-square error as misfit function (`misfit()`)
 * `misfit_spectrum()`: Function to calculate a misfit spectrogram. It uses the fitting tool `simil_fit()` for overlapping frequency bands and averages the misfit for a frequency array.
 
-**References**
+**References**:
 *Gestrich, J. E., Fee, D., Matoza, R. S., Lyons, J. J., Ruiz, M. C. (in prep.). Fitting Jet Noise Similarity Spectra to Volcano Infrasound Data. Earth and Space Science*
 *Matoza, R. S., Fee, D., Garcés, M. A., Seiner, J. M., Ramón, P. A., & Hedlin, M. A. H. (2009). Infrasonic jet noise from volcanic eruptions. Geophysical Research Letters.*
 *Tam, C. K. W., Golebiowski, M., & Seiner, J. M. (1996). On the Two Components of Turbulent Mixing Noise from Supersonic Jets. American Institute of Aeronautics and Astronautics.*
