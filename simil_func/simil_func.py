@@ -539,9 +539,12 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                 P_mat = np.concatenate((P_mat, np.array([PSD]).T), axis=1)
                 tmid = np.append(tmid, matplotlib.dates.date2num((tstart + wwidth / 2).datetime))
 
-
-        tstart = tstart + wwidth * (1 - overlap)
-        tend = tstart + wwidth
+        if np.all(stream) == None:
+            tstart = obs.UTCDateTime(dates.num2date(tmid[n])) - 1/2 * wwidth
+            tend = obs.UTCDateTime(dates.num2date(tmid[n])) + 1/2 * wwidth
+        else:
+            tstart = tstart + wwidth * (1 - overlap)
+            tend = tstart + wwidth
         n = n + 1
 
         if np.around(n / timen * 100) > perc:
