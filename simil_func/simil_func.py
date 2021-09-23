@@ -250,13 +250,18 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
         b1 = np.append(np.array([-np.inf, -np.inf]), np.array([bounds[0].squeeze(),bounds[0].squeeze()]))
         b2 = np.append(np.array([np.inf, np.inf]), np.array([bounds[1].squeeze(),bounds[1].squeeze()]))
     ##### calculate PSD: ##############
+
     if stream == None:
+
         if np.any(response):
             f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=response)
         else:
             f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
     else:
-        f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
+        if np.any(response):
+            f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=response)
+        else:
+            f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
 
     ##### Define starting conditions #####
     m = m0.copy()
@@ -380,10 +385,13 @@ def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None
             [lonlist.append(st[i].stats.longitude) for i in range(len(st))]
             rij = getrij(latlist, lonlist)
 
-            data = np.zeros((len(st[0].data), len(st)))
-            for i in range(len(st)):
-                data[:, i] = st[i].data
-            beam = beamForm(data, rij, sampling_rate, baz, M=len(tvec))  # unfiltered beamformed data
+            if np.all([len(st) > 1, len(st) <10]):
+                data = np.zeros((len(st[0].data), len(st)))
+                for i in range(len(st)):
+                    data[:, i] = st[i].data
+                beam = beamForm(data, rij, sampling_rate, baz, M=len(tvec))  # unfiltered beamformed data
+            else:
+                beam = st[0].data
 
         ## Calculate PSD
         fpsd_o, PSD_o = scipy.signal.welch(beam, sampling_rate,
@@ -409,7 +417,9 @@ def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None
         if PSD_f == None:
             beam = beam * res_const
     # choose frequencies and PSD between frequency bounds for fitting
+    # print(fpsd)
     f = fpsd[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)]
+    # print(f)
     d = np.reshape(PSD[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)], (len(f), 1))
 
     if stream == None:
@@ -463,9 +473,13 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
         tstart = obs.UTCDateTime(dates.num2date(tmid[0])) - wwidth / 2
         tend_abs = obs.UTCDateTime(dates.num2date(tmid[-1])) + wwidth / 2
         tend = tstart + wwidth
-
+    print(tstart)
+    print(tend_abs)
     n = 0
-    timen = (tend_abs - tstart) / (wwidth * (1 - overlap))
+    if np.all(stream==None):
+        timen = len(tmid)
+    else:
+        timen = (tend_abs - tstart) / (wwidth * (1 - overlap))
 
     while tend <= tend_abs:
         for iif in range(len(FREQ_vec)):
@@ -540,8 +554,13 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                 tmid = np.append(tmid, matplotlib.dates.date2num((tstart + wwidth / 2).datetime))
 
         if np.all(stream) == None:
-            tstart = obs.UTCDateTime(dates.num2date(tmid[n])) - 1/2 * wwidth
-            tend = obs.UTCDateTime(dates.num2date(tmid[n])) + 1/2 * wwidth
+            if n+1 < len(tmid):
+                tstart = obs.UTCDateTime(dates.num2date(tmid[n+1])) - wwidth / 2
+                tend = obs.UTCDateTime(dates.num2date(tmid[n+1])) + wwidth / 2
+            else:
+                tstart = obs.UTCDateTime(dates.num2date(tmid[n])) + wwidth / 2
+                tend = obs.UTCDateTime(dates.num2date(tmid[n])) + 3 * wwidth /2
+
         else:
             tstart = tstart + wwidth * (1 - overlap)
             tend = tstart + wwidth
