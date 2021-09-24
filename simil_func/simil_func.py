@@ -7,7 +7,6 @@ import scipy
 import matplotlib
 import obspy as obs
 
-
 def GF(f, fL=None, fF=None, output='GF'):
     '''
     Helper function to calculate the parameters F and G from 
@@ -254,19 +253,23 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     if stream == None:
 
         if np.any(response):
-            f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=response)
+            fpsd, PSD = calc_PSD(PSD_f, stream, baz, PSD_win='1min', response=response)
         else:
-            f, d = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
+            fpsd = PSD_f[0]
+            PSD = PSD_f[1]
+            # fpsd, PSD = calc_PSD(PSD_f, stream, baz, PSD_win='1min')
     else:
         if np.any(response):
-            f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=response)
+            fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, baz, PSD_win='1min', response=response)
         else:
-            f, d, fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min')
+            fpsd, tvec, PSD, beam = calc_PSD(PSD_f, stream, baz, PSD_win='1min')
 
+    f = fpsd[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)]
+    d = np.reshape(PSD[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)], (len(f), 1))
     ##### Define starting conditions #####
     m = m0.copy()
     ARGS = [f, d]
-    ARGS2 = ARGS.copy()
+    # ARGS2 = ARGS.copy()
     M_func = misfit
     a0 = np.log(10 ** ((np.mean(d) + 20 * np.log10(20e-6)) / 10))
     if peaks == 'constant':
@@ -274,7 +277,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
         m = m0[:2]
         b2 = b2[:2]
         b1 = b1[:2]
-        ARGS2 = [f, d, fc]
+        # ARGS2 = [f, d, fc]
         M_func = misfit_peak
         ARGS = [f, d, fc[0]]
         m_try = np.array([a0])
@@ -349,7 +352,7 @@ def simil_fit(stream=None, PSD_f=None, model='LSTFST', freqmin=FREQMIN, freqmax=
     else:
         return beam, tvec, PSD, fpsd, sol_all, norm_all.squeeze()
 
-def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None):
+def calc_PSD(PSD_f, stream, baz, PSD_win='1min', response=None):
     from array_processing.tools import beamForm
     from array_processing.algorithms.helpers import getrij
     import pandas as pd
@@ -371,13 +374,8 @@ def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None
         else:
             tvec = matplotlib.dates.date2num(st[0].stats.starttime.datetime) + st[0].times() / 86400  # datenum time vector
 
-        stf = st.copy()  ## filter for sound pressure level
-        stf.filter("bandpass", freqmin=freqmin, freqmax=freqmax, corners=2, zerophase=True)
-        stf.taper(max_percentage=.01)
-
         if type(stream) == obs.core.trace.Trace:
             beam = st.data
-            beamf = stf.data
         else:
             latlist = []
             lonlist = []
@@ -416,16 +414,12 @@ def calc_PSD(PSD_f, stream, freqmin, freqmax, baz, PSD_win='1min', response=None
         PSD = 10*np.log10(10**(PSD/10) * res_v)
         if PSD_f == None:
             beam = beam * res_const
-    # choose frequencies and PSD between frequency bounds for fitting
-    # print(fpsd)
-    f = fpsd[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)]
-    # print(f)
-    d = np.reshape(PSD[np.all([fpsd > freqmin, fpsd < freqmax], axis=0)], (len(f), 1))
+
 
     if stream == None:
-        return f, d
+        return fpsd, PSD
     else:
-        return f, d, fpsd, tvec, PSD, beam
+        return fpsd, tvec, PSD, beam
 
 def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, baz=None, peaks='bound', bounds=None, fwidth=1, fpwidth=1/2, wwidth=10 * 60,
                     overlap=0.7, model='LSTFST', response=None, **kwargs):
@@ -455,6 +449,7 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
     import obspy as obs
     import matplotlib.dates as dates
     perc = 10
+    time_lsq = 0
     if type(model) == str:
         model = [model]
     # METHOD = method
@@ -468,8 +463,6 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
         tend = tstart + wwidth
     elif np.all(stream==None):
         tmid = PSD_f[0]
-        fpsd = PSD_f[1]
-        PSD = PSD_f[2]
         tstart = obs.UTCDateTime(dates.num2date(tmid[0])) - wwidth / 2
         tend_abs = obs.UTCDateTime(dates.num2date(tmid[-1])) + wwidth / 2
         tend = tstart + wwidth
@@ -482,6 +475,20 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
         timen = (tend_abs - tstart) / (wwidth * (1 - overlap))
 
     while tend <= tend_abs:
+        if stream == None:
+
+            if np.any(response):
+                fpsd, PSD = calc_PSD([PSD_f[1],PSD_f[2][:,n]], stream, baz, PSD_win='1min', response=response)
+            else:
+                fpsd, PSD = calc_PSD([PSD_f[1],PSD_f[2][:,n]], stream, baz, PSD_win='1min')
+        else:
+            st = stream.copy()
+            st.trim(starttime=tstart, endtime=tend)
+            if np.any(response):
+                fpsd, tvec, PSD, beam = calc_PSD(PSD_f, st, baz, PSD_win='1min', response=response)
+            else:
+                fpsd, tvec, PSD, beam = calc_PSD(PSD_f, st, baz, PSD_win='1min')
+
         for iif in range(len(FREQ_vec)):
             freqmin = FREQ_vec[iif]
             freqmax = freqmin * 10 ** fwidth
@@ -513,19 +520,10 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
                     b2 = bounds[1]
                 m0 = np.array([0, 0, f_p, f_p])
                 BOUNDS = (b1, b2)
-            if np.all(PSD_f == None):
-                st = stream.copy()
-                st.trim(starttime=tstart, endtime=tend)
-                beam, tvec, PSD, fpsd, sol_m_temp, norm_m_temp = simil_fit(stream=st, response=response, freqmin=freqmin,
-                                                                                   freqmax=freqmax, m0=m0, baz=baz,
-                                                                                   peaks=PEAKS, model=model,
-                                                                                   bounds=BOUNDS, **kwargs)
-            elif np.all(stream) == None:
-                sol_m_temp, norm_m_temp = simil_fit(PSD_f=[fpsd,PSD[:,n]],response=response, freqmin=freqmin,
-                          freqmax=freqmax, m0=m0, baz=baz,
-                          peaks=PEAKS, model=model,
-                          bounds=BOUNDS, **kwargs)
-
+            sol_m_temp, norm_m_temp = simil_fit(PSD_f=[fpsd,PSD],response=response, freqmin=freqmin,
+                      freqmax=freqmax, m0=m0, baz=baz,
+                      peaks=PEAKS, model=model,
+                      bounds=BOUNDS, **kwargs)
             if iif == 0:
                 norm_m_f = np.array([norm_m_temp]).T
                 sol_m_f = np.array([sol_m_temp])
@@ -570,9 +568,6 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
             print('Progess:' + str(perc) + '%')
             perc = perc + 10
     sol_m = np.moveaxis(sol_m, 0, -2)
-    print(np.shape(norm_m))
-    print(tend)
-    print(tend_abs)
     FREQ_prob_d = np.diff(np.log10(FREQ_vec_prob))[0]
     FREQ_vec_max = FREQ_vec * 10 ** fwidth
     nf = len(FREQ_vec_prob)
@@ -613,7 +608,6 @@ def misfit_spectrum(stream=None, PSD_f=None, FREQ_vec=None, FREQ_vec_prob=None, 
 
             M[:, i, iit] = M[:, i, iit] / l
     print('Calculations are done.')
-
     if np.all(PSD_f == None):
         return beam_all, tvec_all, P_mat, fpsd, norm_m, tmid, M, sol_m
     elif np.all(stream==None):
